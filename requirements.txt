@@ -1,0 +1,63 @@
+# SumOmniEval - Single Source of Truth for All Dependencies
+# All metrics work with these exact versions - NO CONFLICTS
+
+# ============================================================================
+# Core Dependencies
+# ============================================================================
+streamlit==1.40.0
+pandas==2.2.0
+numpy==1.26.4  # CRITICAL: Must be 1.x for pyemd (MoverScore dependency) compatibility
+
+# ============================================================================
+# Deep Learning Stack (Modern, CPU-only)
+# ============================================================================
+# Note: PyTorch installed separately by setup.sh for CPU compatibility
+transformers==4.45.0
+tokenizers==0.20.3
+sentencepiece==0.2.0
+protobuf==3.20.3
+
+# ============================================================================
+# Era 1: Word Overlap & Fluency Metrics
+# ============================================================================
+rouge-score==0.1.2
+sacrebleu==2.4.0
+nltk==3.9.1
+python-Levenshtein==0.25.0
+Levenshtein==0.25.0
+
+# ============================================================================
+# Era 2: Embedding-Based Metrics
+# ============================================================================
+bert-score==0.3.13
+# MoverScore: Installed separately via setup.sh from GitHub
+
+# ============================================================================
+# Era 3A: Logic Checkers & Era 3B: AI Simulators (API)
+# ============================================================================
+# Era 3A uses transformers + DeBERTa-v3 (already included above)
+# Era 3B uses H2OGPTE API for LLM-as-a-Judge metrics
+h2ogpte==1.6.54  # API client for Era 3B metrics (G-Eval, DAG, FactChecker)
+python-dotenv==1.0.0  # For loading API credentials from .env file
+
+# ============================================================================
+# NLP Utilities
+# ============================================================================
+spacy==3.7.5
+tqdm==4.66.5
+scikit-learn==1.5.2
+
+# ============================================================================
+# HuggingFace Ecosystem
+# ============================================================================
+huggingface-hub==0.25.2
+datasets==3.0.0
+evaluate==0.4.3
+
+# ============================================================================
+# Additional Dependencies
+# ============================================================================
+pyyaml==6.0.2
+regex==2024.9.11
+safetensors==0.4.5
+filelock==3.16.1

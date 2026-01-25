@@ -1,0 +1,84 @@
+Eval Metric Workshop Plan
+
+Part 1: The Theory (The "Why")
+1. The Hook: The "Copy vs. Create" Shift
+The Narrative: For 20 years, AI didn't write; it just highlighted.
+The Past (Extractive): We used to copy-paste the most important sentences. It was clunky and robotic, but it never lied because it was using the source's own words.
+The Present (Abstractive): Now, LLMs read the text and rewrite it from scratch. It sounds human, but because it is creating rather than copying, it introduces a new danger: Hallucination.
+2. The Core Tension: Accuracy vs. Faithfulness
+The Narrative: To judge these new creative models, we need two different yardsticks.
+Pillar A: Semantic Accuracy ("The Vibe" & "The Gist")
+Definition: Does it capture the main points? Is it fluent? Is it complete?
+The Question: "Does this read and feel like a good human summary?"
+Status: LLMs are Great at this!
+Pillar B: Factual Faithfulness ("The Truth")
+Definition: Is every claim in the summary supported by the source document?
+The Question: "Is this actually true?", "Can we verify this in the source?"
+Status: LLMs Struggle here.
+3. The Conflict: The "Smooth Liar" Trade-off
+The Narrative: Here is the dangerous part: These two pillars are often at war with each other.
+The "Smooth Liar" Paradox:
+As models become more fluent and creative (High Accuracy/Vibe), they tend to hallucinate more to fill in the gaps (Low Faithfulness).
+The Trap: Fluency masks Inconsistency. We trust the summary because the grammar is perfect. It lies to us confidently.
+Part 2: The Solutions (The "How")
+Era 1: The Bean Counters (Word Overlap)
+Theme: The Age of "Exact Matches"
+1. The Story
+In the early days (2000s), we treated text like Scrabble tiles. We assumed that if the computer used the exact same words as the human reference, it must be right. We didn't care about meaning; we only cared about matching symbols.
+2. The Protagonist
+ROUGE & BLEU: The industry standards. ROUGE focuses on recall (did you include all the reference words?), while BLEU focuses on precision.
+3. The Supporting Cast
+METEOR: The clever cousin. ROUGE fails if you write "fast" instead of "quick." METEOR fixes this by counting synonyms and stem forms (running = run).
+Levenshtein Distance: The spellchecker. It measures "edit distance", how many deletions or swaps it takes to turn the summary into the reference.
+Perplexity: Special Mention. This measures Fluency, not truth. It checks how "surprised" a model is by the text. (Warning: A model can hallucinate a lie with perfect fluency/low perplexity).
+4. The "Death of ROUGE" (The Failure Mode)
+Scenario: The source says "The movie was bad."
+AI Summary: "The film was terrible."
+ROUGE Score: 0. (Because "film" is not "movie" and "terrible" is not "bad").
+The Lesson: These metrics punish creativity and paraphrase.
+5. Pros & Cons
+✅ Pros: Fast, cheap, and standard (everyone knows them).
+❌ Cons: Misses synonyms, ignores structure, creates "Frankenstein" sentences.
+Era 2: The Vibe Checkers (Embeddings)
+Theme: The Age of "Semantic Similarity"
+1. The Story
+Around 2019, we realized that exact words don't matter, meaning matters. We started using 'Embeddings' (dense vector representations) to map words into space. If 'Lawyer' and 'Attorney' are close in space, they should count as a match.
+2. The Protagonist
+BERTScore: It calculates the cosine similarity between the summary's "vibe" and the source's "vibe" using contextual embeddings.
+3. The Supporting Cast
+MoverScore: Uses "Earth Mover’s Distance" (a transportation math problem) to calculate the "cost" of moving the meaning from the summary to the source. It is often softer and more robust than BERTScore.
+BLEURT: A Google model pre-trained specifically on Human Judgments. Instead of just math, it tries to predict "What score would a human give this?"
+4. The "Negation Trap" (The Failure Mode)
+Sentence A: "The patient has cancer."
+Sentence B: "The patient has no cancer."
+BERTScore: 96% Similarity.
+The Lesson: Because these sentences share almost all the same context, embeddings think they are identical. They are blind to small logic words like "not," "never," or "unless."
+5. Pros & Cons
+✅ Pros: Captures synonyms and paraphrasing perfectly.
+❌ Cons: Terrible at "Factuality." Can't distinguish between opposite claims if the context is similar.
+Era 3: The Judges (Logic & Agents)
+Theme: The Age of "Reasoning" & "Fact-Checking"
+1. The Story 
+We stopped trying to use math formulas to grade language. We realized that to judge a summary, you need to understand logic. We split into two camps: The 'Logic Checkers' (who use NLI to find truth) and the 'AI Simulators' (who mimic human grading).
+Group A: The Logic Checkers (The "Truth" Squad)
+2. The Protagonist
+SummaC (Summary Consistency): It breaks text into a sentence-by-sentence matrix. It uses NLI (Natural Language Inference) to ask: "Does Sentence A logically prove Sentence B?"
+3. The Supporting Cast
+FactCC: The ancestor. A BERT model trained specifically to flag text as "Consistent" or "Inconsistent."
+AlignScore: The generalist. Trained on 4.7 million diverse tasks to be a universal alignment checker. In this 'Logic Checking' era, we have several powerful tools. SummaC is the classic example that checks sentence-by-sentence. But there are newer 'Generalist' models like AlignScore that are trained on millions of diverse tasks to do this even better. The concept remains the same: they are checking for logical consistency, not just similar words.
+QAG Family (QAEval / QAFactEval): The detectives. They generate questions from the source ("Who is the CEO?") and see if the summary answers them correctly.
+MENLI: The skeptic. Uses NLI to detect adversarial attacks and subtle inconsistencies.
+4. The Failure Mode
+The Problem: These models are literal-minded. They are great at catching lies, but they can't tell you if the summary flows well or uses the right tone.
+5. Pros & Cons
+✅ Pros: The Gold Standard for Hallucination Detection (Faithfulness).
+❌ Cons: Doesn't measure "Vibe" or "Flow", and it requires significant compute!
+Group B: The AI Simulators (LLM-as-a-Judge)
+2. The Protagonist
+G-Eval (GPT-4): We give a rubric to a powerful LLM: "Rate this summary from 1-10 on faithfulness. Think step-by-step."
+3. The Supporting Cast
+DAG (DeepEval): The structured judge. It breaks the evaluation into a decision tree (Directed Acyclic Graph) of smaller questions rather than one big score.
+Prometheus: The open-source judge. A model you can run yourself (fine-tuned on feedback) to avoid sending data to OpenAI.
+4. Pros & Cons
+✅ Pros: Highest correlation with human judgment. Can measure nuance, tone, and style.
+❌ Cons: Expensive, slow, and the judge can potentially be biased (LLMs prefer their own writing style).
