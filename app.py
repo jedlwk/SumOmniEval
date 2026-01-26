@@ -19,6 +19,9 @@ from src.evaluators.era1_word_overlap import compute_all_era1_metrics
 from src.evaluators.era2_embeddings import compute_all_era2_metrics
 from src.evaluators.era3_logic_checkers import compute_all_era3_metrics
 from src.utils.data_loader import load_sample_data, get_sample_by_index
+import pandas as pd
+import json
+from io import BytesIO
 
 # Check if H2OGPTE API is available
 try:
@@ -78,6 +81,14 @@ def initialize_session_state():
         st.session_state.uploader_key = 0
     if 'last_uploader_key' not in st.session_state:
         st.session_state.last_uploader_key = -1
+    if 'batch_evaluation_running' not in st.session_state:
+        st.session_state.batch_evaluation_running = False
+    if 'batch_results' not in st.session_state:
+        st.session_state.batch_results = None
+    if 'batch_file_format' not in st.session_state:
+        st.session_state.batch_file_format = None
+    if 'batch_filename' not in st.session_state:
+        st.session_state.batch_filename = None
 
 
 def parse_dataset_file(uploaded_file):
@@ -683,6 +694,125 @@ def display_results(results: Dict[str, Dict[str, Any]]):
                 else:
                     st.warning(f"⚠️ {dag_result.get('error', 'No result')}")
 
+        # Batch evaluation button (show after DAG results if dataset uploaded)
+        if st.session_state.uploaded_dataset is not None and \
+           st.session_state.source_column and st.session_state.summary_column and \
+           st.session_state.columns_selected and H2OGPTE_AVAILABLE:
+            st.markdown("---")
+            st.subheader("📊 Batch Evaluation")
+            st.caption("Evaluate the entire dataset with API metrics (FactChecker, G-Eval, DAG)")
+
+            col1, col2, col3 = st.columns([1, 2, 1])
+            with col2:
+                if st.button("🚀 Evaluate Entire Dataset", type="primary", use_container_width=True, key="batch_eval_main"):
+                    st.session_state.batch_evaluation_running = True
+                    st.rerun()
+
+
+def batch_evaluate_dataset(df: pd.DataFrame, source_col: str, summary_col: str, model_name: str):
+    """
+    Evaluate entire dataset with API metrics only (no token limits).
+
+    Args:
+        df: DataFrame with source and summary columns
+        source_col: Name of source text column
+        summary_col: Name of summary text column
+        model_name: LLM model to use for evaluation
+
+    Returns:
+        DataFrame with added metric columns
+    """
+    results_df = df.copy()
+
+    # Initialize result columns
+    results_df['factchecker_score'] = None
+    results_df['geval_faithfulness'] = None
+    results_df['geval_coherence'] = None
+    results_df['geval_relevance'] = None
+    results_df['geval_fluency'] = None
+    results_df['dag_score'] = None
+
+    # Create LLM Judge evaluator
+    evaluator = LLMJudgeEvaluator(model_name=model_name)
+
+    # Progress bar
+    progress_bar = st.progress(0)
+    status_text = st.empty()
+
+    total_rows = len(df)
+
+    for idx, row in df.iterrows():
+        source_text = str(row[source_col])
+        summary_text = str(row[summary_col])
+
+        # Update progress
+        current_row = idx + 1
+        progress_bar.progress(current_row / total_rows)
+        status_text.text(f"Processing row {current_row}/{total_rows}")
+
+        try:
+            # FactChecker
+            factchecker_result = evaluator.evaluate_factchecker(source_text, summary_text)
+            results_df.at[idx, 'factchecker_score'] = factchecker_result.get('score', None)
+
+            # G-Eval (4 dimensions)
+            geval_results = evaluator.evaluate_geval(source_text, summary_text)
+            results_df.at[idx, 'geval_faithfulness'] = geval_results.get('faithfulness', {}).get('score', None)
+            results_df.at[idx, 'geval_coherence'] = geval_results.get('coherence', {}).get('score', None)
+            results_df.at[idx, 'geval_relevance'] = geval_results.get('relevance', {}).get('score', None)
+            results_df.at[idx, 'geval_fluency'] = geval_results.get('fluency', {}).get('score', None)
+
+            # DAG
+            dag_result = evaluator.evaluate_dag(source_text, summary_text)
+            results_df.at[idx, 'dag_score'] = dag_result.get('raw_score', None)
+
+        except Exception as e:
+            st.error(f"Error processing row {current_row}: {str(e)}")
+            # Fill with None on error
+            results_df.at[idx, 'factchecker_score'] = None
+            results_df.at[idx, 'geval_faithfulness'] = None
+            results_df.at[idx, 'geval_coherence'] = None
+            results_df.at[idx, 'geval_relevance'] = None
+            results_df.at[idx, 'geval_fluency'] = None
+            results_df.at[idx, 'dag_score'] = None
+
+    progress_bar.progress(1.0)
+    status_text.text(f"✅ Completed! Processed {total_rows}/{total_rows} rows")
+
+    return results_df
+
+
+def export_results(df: pd.DataFrame, original_format: str, original_filename: str) -> BytesIO:
+    """
+    Export results DataFrame to same format as original file.
+
+    Args:
+        df: DataFrame with results
+        original_format: File extension (csv, json, xlsx, tsv)
+        original_filename: Original filename for naming
+
+    Returns:
+        BytesIO object with exported data
+    """
+    output = BytesIO()
+
+    if original_format == 'csv':
+        df.to_csv(output, index=False)
+        output.seek(0)
+    elif original_format == 'tsv':
+        df.to_csv(output, index=False, sep='\t')
+        output.seek(0)
+    elif original_format in ['xlsx', 'xls']:
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            df.to_excel(writer, index=False, sheet_name='Results')
+        output.seek(0)
+    elif original_format == 'json':
+        json_data = df.to_json(orient='records', indent=2)
+        output.write(json_data.encode('utf-8'))
+        output.seek(0)
+
+    return output
+
 
 def main():
     """Main application function."""
@@ -935,6 +1065,18 @@ def main():
     except Exception as e:
         st.sidebar.error(f"Error loading data: {e}")
 
+    # Batch evaluation button (only show if dataset uploaded and API available)
+    if st.session_state.uploaded_dataset is not None and \
+       st.session_state.source_column and st.session_state.summary_column and \
+       st.session_state.columns_selected and H2OGPTE_AVAILABLE:
+        st.sidebar.markdown("---")
+        st.sidebar.subheader("📊 Batch Evaluation")
+        st.sidebar.caption("Evaluate entire dataset with API metrics (FactChecker, G-Eval, DAG)")
+
+        if st.sidebar.button("🚀 Evaluate Entire Dataset", type="primary", use_container_width=True):
+            st.session_state.batch_evaluation_running = True
+            st.rerun()
+
     # Model selection for LLM-as-a-Judge (if API available)
     if H2OGPTE_AVAILABLE:
         st.sidebar.markdown("---")
@@ -1066,6 +1208,84 @@ def main():
 
             st.session_state.results = results
             st.success("✅ Evaluation complete!")
+
+    # Handle batch evaluation
+    if st.session_state.batch_evaluation_running:
+        st.markdown("---")
+        st.header("📊 Batch Evaluation in Progress")
+
+        # Get dataset info
+        df = st.session_state.uploaded_dataset
+        source_col = st.session_state.source_column
+        summary_col = st.session_state.summary_column
+        model_name = st.session_state.selected_model
+
+        # Get original file format
+        original_filename = st.session_state.get('last_uploaded_file', 'results')
+        file_extension = original_filename.split('.')[-1].lower()
+
+        st.info(f"🔄 Evaluating {len(df)} rows with API metrics (FactChecker, G-Eval, DAG)...")
+        st.caption(f"Using model: **{model_name.split('/')[-1]}**")
+
+        # Run batch evaluation
+        try:
+            results_df = batch_evaluate_dataset(df, source_col, summary_col, model_name)
+
+            # Store results
+            st.session_state.batch_results = results_df
+            st.session_state.batch_file_format = file_extension
+            st.session_state.batch_filename = original_filename
+            st.session_state.batch_evaluation_running = False
+
+            st.success("✅ Batch evaluation complete!")
+            st.rerun()
+
+        except Exception as e:
+            st.error(f"❌ Error during batch evaluation: {str(e)}")
+            st.session_state.batch_evaluation_running = False
+
+    # Display batch results and download button
+    if st.session_state.batch_results is not None:
+        st.markdown("---")
+        st.header("📥 Download Results")
+
+        results_df = st.session_state.batch_results
+        file_format = st.session_state.batch_file_format
+        original_filename = st.session_state.batch_filename
+
+        # Show preview
+        st.subheader("Preview Results")
+        st.dataframe(results_df.head(10), use_container_width=True)
+        st.caption(f"Showing first 10 rows of {len(results_df)} total rows")
+
+        # Export results
+        output_filename = original_filename.replace(f'.{file_format}', f'_evaluated.{file_format}')
+        export_data = export_results(results_df, file_format, output_filename)
+
+        # Download button
+        mime_types = {
+            'csv': 'text/csv',
+            'tsv': 'text/tab-separated-values',
+            'xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'xls': 'application/vnd.ms-excel',
+            'json': 'application/json'
+        }
+
+        st.download_button(
+            label=f"⬇️ Download {output_filename}",
+            data=export_data,
+            file_name=output_filename,
+            mime=mime_types.get(file_format, 'application/octet-stream'),
+            type="primary",
+            use_container_width=True
+        )
+
+        # Clear results button
+        if st.button("🗑️ Clear Results", use_container_width=True):
+            st.session_state.batch_results = None
+            st.session_state.batch_file_format = None
+            st.session_state.batch_filename = None
+            st.rerun()
 
     # Display results
     if st.session_state.results:
