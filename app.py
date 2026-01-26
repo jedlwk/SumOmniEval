@@ -741,14 +741,13 @@ def batch_evaluate_dataset(df: pd.DataFrame, source_col: str, summary_col: str, 
 
     total_rows = len(df)
 
-    for idx, row in df.iterrows():
+    for row_num, (idx, row) in enumerate(df.iterrows(), start=1):
         source_text = str(row[source_col])
         summary_text = str(row[summary_col])
 
         # Update progress
-        current_row = idx + 1
-        progress_bar.progress(current_row / total_rows)
-        status_text.text(f"Processing row {current_row}/{total_rows}")
+        progress_bar.progress(row_num / total_rows)
+        status_text.text(f"Processing row {row_num}/{total_rows}")
 
         try:
             # FactChecker
@@ -767,7 +766,7 @@ def batch_evaluate_dataset(df: pd.DataFrame, source_col: str, summary_col: str, 
             results_df.at[idx, 'dag_score'] = dag_result.get('raw_score', None)
 
         except Exception as e:
-            st.error(f"Error processing row {current_row}: {str(e)}")
+            st.error(f"Error processing row {row_num}: {str(e)}")
             # Fill with None on error
             results_df.at[idx, 'factchecker_score'] = None
             results_df.at[idx, 'geval_faithfulness'] = None
@@ -1090,10 +1089,10 @@ def main():
         ]
 
         selected_model = st.sidebar.selectbox(
-            "Select model for LLM-as-a-Judge:",
+            "Select LLM Model:",
             options=available_models,
             index=0,  # Default to Llama-3.3-70B
-            help="Choose the LLM model for Era 3 AI Simulators"
+            help="Choose the LLM model for API metrics (FactChecker, G-Eval, DAG)"
         )
         st.session_state.selected_model = selected_model
         st.sidebar.caption(f"✅ Using: {selected_model.split('/')[-1]}")
@@ -1244,8 +1243,8 @@ def main():
             st.error(f"❌ Error during batch evaluation: {str(e)}")
             st.session_state.batch_evaluation_running = False
 
-    # Display batch results and download button
-    if st.session_state.batch_results is not None:
+    # Display batch results and download button (only if not currently evaluating)
+    if st.session_state.batch_results is not None and not st.session_state.batch_evaluation_running:
         st.markdown("---")
         st.header("📥 Download Results")
 
