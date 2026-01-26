@@ -45,17 +45,11 @@ st.set_page_config(
 
 def initialize_session_state():
     """Initialize session state variables."""
-    # Load Sample 1 by default on first run
-    if 'source_text' not in st.session_state or 'summary_text' not in st.session_state:
-        try:
-            from src.utils.data_loader import get_sample_by_index
-            sample = get_sample_by_index(0)  # First sample
-            st.session_state.source_text = sample['source']
-            st.session_state.summary_text = sample['summary']
-        except:
-            # Fallback to empty if sample data not available
-            st.session_state.source_text = ""
-            st.session_state.summary_text = ""
+    # Start with empty text areas - user must select a row
+    if 'source_text' not in st.session_state:
+        st.session_state.source_text = ""
+    if 'summary_text' not in st.session_state:
+        st.session_state.summary_text = ""
 
     if 'results' not in st.session_state:
         st.session_state.results = None
@@ -89,6 +83,8 @@ def initialize_session_state():
         st.session_state.batch_file_format = None
     if 'batch_filename' not in st.session_state:
         st.session_state.batch_filename = None
+    if 'start_batch_eval' not in st.session_state:
+        st.session_state.start_batch_eval = False
 
 
 def parse_dataset_file(uploaded_file):
@@ -695,6 +691,7 @@ def display_results(results: Dict[str, Dict[str, Any]]):
                     st.warning(f"⚠️ {dag_result.get('error', 'No result')}")
 
         # Batch evaluation button (show after DAG results if dataset uploaded)
+        # Batch evaluation button (show after DAG results if dataset uploaded)
         if st.session_state.uploaded_dataset is not None and \
            st.session_state.source_column and st.session_state.summary_column and \
            st.session_state.columns_selected and H2OGPTE_AVAILABLE:
@@ -702,14 +699,22 @@ def display_results(results: Dict[str, Dict[str, Any]]):
             st.subheader("📊 Batch Evaluation")
             st.caption("Evaluate the entire dataset with API metrics (FactChecker, G-Eval, DAG)")
 
+            # Use callback to set state immediately when button is clicked
+            def start_batch_evaluation_main():
+                st.session_state.start_batch_eval = True
+
             col1, col2, col3 = st.columns([1, 2, 1])
             with col2:
-                if st.button("🚀 Evaluate Entire Dataset", type="primary", use_container_width=True, key="batch_eval_main"):
-                    st.session_state.batch_evaluation_running = True
-                    st.rerun()
+                st.button(
+                    "🚀 Evaluate Entire Dataset",
+                    type="primary",
+                    use_container_width=True,
+                    key="batch_eval_main",
+                    on_click=start_batch_evaluation_main
+                )
 
 
-def batch_evaluate_dataset(df: pd.DataFrame, source_col: str, summary_col: str, model_name: str):
+def batch_evaluate_dataset(df: pd.DataFrame, source_col: str, summary_col: str, model_name: str, progress_bar, status_text, preview_placeholder=None):
     """
     Evaluate entire dataset with API metrics only (no token limits).
 
@@ -718,14 +723,16 @@ def batch_evaluate_dataset(df: pd.DataFrame, source_col: str, summary_col: str, 
         source_col: Name of source text column
         summary_col: Name of summary text column
         model_name: LLM model to use for evaluation
+        progress_bar: Streamlit progress bar widget
+        status_text: Streamlit empty text widget for status updates
+        preview_placeholder: Streamlit placeholder for live preview (first 10 rows)
 
     Returns:
         DataFrame with added metric columns
     """
     results_df = df.copy()
 
-    # Initialize result columns
-    results_df['factchecker_score'] = None
+    # Initialize result columns (5 metrics: 4 G-Eval dimensions + DAG)
     results_df['geval_faithfulness'] = None
     results_df['geval_coherence'] = None
     results_df['geval_relevance'] = None
@@ -734,10 +741,6 @@ def batch_evaluate_dataset(df: pd.DataFrame, source_col: str, summary_col: str, 
 
     # Create LLM Judge evaluator
     evaluator = LLMJudgeEvaluator(model_name=model_name)
-
-    # Progress bar
-    progress_bar = st.progress(0)
-    status_text = st.empty()
 
     total_rows = len(df)
 
@@ -750,16 +753,21 @@ def batch_evaluate_dataset(df: pd.DataFrame, source_col: str, summary_col: str, 
         status_text.text(f"Processing row {row_num}/{total_rows}")
 
         try:
-            # FactChecker
-            factchecker_result = evaluator.evaluate_factchecker(source_text, summary_text)
-            results_df.at[idx, 'factchecker_score'] = factchecker_result.get('score', None)
+            # G-Eval Faithfulness (this serves as our fact-checking metric)
+            faithfulness_result = evaluator.evaluate_faithfulness(source_text, summary_text)
+            results_df.at[idx, 'geval_faithfulness'] = faithfulness_result.get('score', None)
 
-            # G-Eval (4 dimensions)
-            geval_results = evaluator.evaluate_geval(source_text, summary_text)
-            results_df.at[idx, 'geval_faithfulness'] = geval_results.get('faithfulness', {}).get('score', None)
-            results_df.at[idx, 'geval_coherence'] = geval_results.get('coherence', {}).get('score', None)
-            results_df.at[idx, 'geval_relevance'] = geval_results.get('relevance', {}).get('score', None)
-            results_df.at[idx, 'geval_fluency'] = geval_results.get('fluency', {}).get('score', None)
+            # G-Eval Coherence
+            coherence_result = evaluator.evaluate_coherence(summary_text)
+            results_df.at[idx, 'geval_coherence'] = coherence_result.get('score', None)
+
+            # G-Eval Relevance
+            relevance_result = evaluator.evaluate_relevance(source_text, summary_text)
+            results_df.at[idx, 'geval_relevance'] = relevance_result.get('score', None)
+
+            # G-Eval Fluency
+            fluency_result = evaluator.evaluate_fluency(summary_text)
+            results_df.at[idx, 'geval_fluency'] = fluency_result.get('score', None)
 
             # DAG
             dag_result = evaluator.evaluate_dag(source_text, summary_text)
@@ -768,12 +776,17 @@ def batch_evaluate_dataset(df: pd.DataFrame, source_col: str, summary_col: str, 
         except Exception as e:
             st.error(f"Error processing row {row_num}: {str(e)}")
             # Fill with None on error
-            results_df.at[idx, 'factchecker_score'] = None
             results_df.at[idx, 'geval_faithfulness'] = None
             results_df.at[idx, 'geval_coherence'] = None
             results_df.at[idx, 'geval_relevance'] = None
             results_df.at[idx, 'geval_fluency'] = None
             results_df.at[idx, 'dag_score'] = None
+
+        # Update live preview for first 10 rows
+        if preview_placeholder is not None and row_num <= 10:
+            # Show preview of first 10 rows with all columns
+            preview_df = results_df.head(10).copy()
+            preview_placeholder.dataframe(preview_df, use_container_width=True)
 
     progress_bar.progress(1.0)
     status_text.text(f"✅ Completed! Processed {total_rows}/{total_rows} rows")
@@ -816,6 +829,72 @@ def export_results(df: pd.DataFrame, original_format: str, original_filename: st
 def main():
     """Main application function."""
     initialize_session_state()
+
+    # Check if batch evaluation was triggered by button click
+    if st.session_state.start_batch_eval:
+        st.session_state.start_batch_eval = False  # Reset flag
+        st.session_state.batch_results = None  # Clear old results
+        st.session_state.batch_evaluation_running = True  # Start evaluation
+        st.rerun()
+
+    # Handle batch evaluation - MUST be at top before any other UI renders
+    if st.session_state.batch_evaluation_running:
+        try:
+            st.title("📊 SumOmniEval - Batch Evaluation")
+            st.markdown("---")
+            st.header("📊 Batch Evaluation in Progress")
+
+            # Get dataset info
+            df = st.session_state.uploaded_dataset
+            source_col = st.session_state.source_column
+            summary_col = st.session_state.summary_column
+            model_name = st.session_state.selected_model
+
+            if df is None:
+                st.error("❌ No dataset found! Please upload a dataset first.")
+                st.session_state.batch_evaluation_running = False
+                st.stop()
+
+            # Get original file format
+            original_filename = st.session_state.get('last_uploaded_file', 'results')
+            file_extension = original_filename.split('.')[-1].lower()
+
+            # Show evaluation info
+            num_rows = len(df)
+            st.info(f"🔄 Evaluating {num_rows} rows with API metrics (G-Eval, DAG)...")
+            st.caption(f"Using model: **{model_name.split('/')[-1]}**")
+            st.caption("This may take several minutes depending on dataset size...")
+            st.markdown("")  # spacing
+
+            # Create progress bar and status text widgets
+            st.markdown("**Progress:**")
+            progress_bar = st.progress(0)
+            status_text = st.empty()
+            status_text.text("Initializing...")
+
+            # Create preview section for first 10 rows
+            st.markdown("")
+            st.markdown("**Live Preview (first 10 rows):**")
+            preview_placeholder = st.empty()
+
+            # Run batch evaluation with live preview
+            results_df = batch_evaluate_dataset(df, source_col, summary_col, model_name, progress_bar, status_text, preview_placeholder)
+
+            # Store results
+            st.session_state.batch_results = results_df
+            st.session_state.batch_file_format = file_extension
+            st.session_state.batch_filename = original_filename
+            st.session_state.batch_evaluation_running = False
+
+            st.success("✅ Batch evaluation complete!")
+            st.rerun()
+
+        except Exception as e:
+            st.error(f"❌ Error during batch evaluation: {str(e)}")
+            st.session_state.batch_evaluation_running = False
+
+        # Don't render anything else while evaluating
+        st.stop()
 
     # Check available metrics
     available = check_metric_availability()
@@ -1033,10 +1112,10 @@ def main():
             df = load_sample_data()
             num_samples = len(df)
 
-            # Build options list from sample data
-            all_options = [f"Sample {i+1}" for i in range(num_samples)]
+            # Build options list with placeholder
+            all_options = ["-- Select a row --"] + [f"Sample {i+1}" for i in range(num_samples)]
 
-            # Determine default index
+            # Determine default index (0 = placeholder)
             default_idx = st.session_state.get('data_selector', 0)
             if default_idx >= len(all_options):
                 default_idx = 0
@@ -1045,9 +1124,10 @@ def main():
             def on_data_change():
                 """Callback when data selection changes."""
                 selected_idx = st.session_state.data_selector
-                sample = get_sample_by_index(selected_idx)
-                st.session_state.source_text = sample['source']
-                st.session_state.summary_text = sample['summary']
+                if selected_idx > 0:  # Not the placeholder
+                    sample = get_sample_by_index(selected_idx - 1)  # Adjust for placeholder
+                    st.session_state.source_text = sample['source']
+                    st.session_state.summary_text = sample['summary']
 
             selected_data = st.sidebar.selectbox(
                 "Choose sample to evaluate:",
@@ -1058,8 +1138,9 @@ def main():
                 on_change=on_data_change
             )
 
-            # Show current selection
-            st.sidebar.info(f"📄 Currently: {all_options[selected_data]}")
+            # Show current selection if a sample is selected (not placeholder)
+            if selected_data > 0:
+                st.sidebar.info(f"📄 Currently: {all_options[selected_data]}")
 
     except Exception as e:
         st.sidebar.error(f"Error loading data: {e}")
@@ -1072,9 +1153,17 @@ def main():
         st.sidebar.subheader("📊 Batch Evaluation")
         st.sidebar.caption("Evaluate entire dataset with API metrics (FactChecker, G-Eval, DAG)")
 
-        if st.sidebar.button("🚀 Evaluate Entire Dataset", type="primary", use_container_width=True):
-            st.session_state.batch_evaluation_running = True
-            st.rerun()
+        # Use callback to set state immediately when button is clicked
+        def start_batch_evaluation():
+            st.session_state.start_batch_eval = True
+
+        st.sidebar.button(
+            "🚀 Evaluate Entire Dataset",
+            type="primary",
+            use_container_width=True,
+            on_click=start_batch_evaluation,
+            key="batch_eval_sidebar"
+        )
 
     # Model selection for LLM-as-a-Judge (if API available)
     if H2OGPTE_AVAILABLE:
@@ -1207,41 +1296,6 @@ def main():
 
             st.session_state.results = results
             st.success("✅ Evaluation complete!")
-
-    # Handle batch evaluation
-    if st.session_state.batch_evaluation_running:
-        st.markdown("---")
-        st.header("📊 Batch Evaluation in Progress")
-
-        # Get dataset info
-        df = st.session_state.uploaded_dataset
-        source_col = st.session_state.source_column
-        summary_col = st.session_state.summary_column
-        model_name = st.session_state.selected_model
-
-        # Get original file format
-        original_filename = st.session_state.get('last_uploaded_file', 'results')
-        file_extension = original_filename.split('.')[-1].lower()
-
-        st.info(f"🔄 Evaluating {len(df)} rows with API metrics (FactChecker, G-Eval, DAG)...")
-        st.caption(f"Using model: **{model_name.split('/')[-1]}**")
-
-        # Run batch evaluation
-        try:
-            results_df = batch_evaluate_dataset(df, source_col, summary_col, model_name)
-
-            # Store results
-            st.session_state.batch_results = results_df
-            st.session_state.batch_file_format = file_extension
-            st.session_state.batch_filename = original_filename
-            st.session_state.batch_evaluation_running = False
-
-            st.success("✅ Batch evaluation complete!")
-            st.rerun()
-
-        except Exception as e:
-            st.error(f"❌ Error during batch evaluation: {str(e)}")
-            st.session_state.batch_evaluation_running = False
 
     # Display batch results and download button (only if not currently evaluating)
     if st.session_state.batch_results is not None and not st.session_state.batch_evaluation_running:
