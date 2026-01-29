@@ -1,64 +1,82 @@
-# SumOmniEval - Single Source of Truth for All Dependencies
-# All metrics work with these exact versions - NO CONFLICTS
+# SumOmniEval v2.0 - Requirements
+# 24 metrics across 2 evaluation stages
+# All local models < 2GB each | Total storage ~6GB
 
-# ============================================================================
-# Core Dependencies
-# ============================================================================
-streamlit==1.40.0
-pandas==2.2.0
-numpy==1.26.4  # CRITICAL: Must be 1.x for pyemd (MoverScore dependency) compatibility
-openpyxl==3.1.2  # Excel file support for dataset uploads
+# =============================================================================
+# Core Framework
+# =============================================================================
+streamlit==1.40.0           # Web UI
+pandas==2.2.0               # Data handling
+numpy==1.26.4               # CRITICAL: Must be 1.x for pyemd (MoverScore)
+openpyxl==3.1.2             # Excel file support
 
-# ============================================================================
-# Deep Learning Stack (Modern, CPU-only)
-# ============================================================================
-# Note: PyTorch installed separately by setup.sh for CPU compatibility
-transformers==4.45.0
-tokenizers==0.20.3
-sentencepiece==0.2.0
-protobuf==3.20.3
+# =============================================================================
+# Deep Learning Stack
+# =============================================================================
+# PyTorch: Install separately for CPU-only: pip install torch --index-url https://download.pytorch.org/whl/cpu
+transformers==4.45.0        # HuggingFace models (NLI, FactCC, AlignScore, Perplexity)
+tokenizers==0.20.3          # Fast tokenization
+sentencepiece==0.2.0        # Tokenizer for some models
+protobuf==3.20.3            # Model serialization
 
-# ============================================================================
-# Era 1: Word Overlap & Fluency Metrics
-# ============================================================================
-rouge-score==0.1.2
-sacrebleu==2.4.0
-nltk==3.9.1
-python-Levenshtein==0.25.0
-Levenshtein==0.25.0
+# =============================================================================
+# Stage 2 - Lexical Metrics (ROUGE, BLEU, METEOR, etc.)
+# Models: None (rule-based) | Size: ~100MB total
+# =============================================================================
+rouge-score==0.1.2          # ROUGE-1/2/L
+sacrebleu==2.4.0            # BLEU, chrF++
+nltk==3.9.1                 # METEOR (requires WordNet data)
+python-Levenshtein==0.25.0  # Levenshtein distance
+Levenshtein==0.25.0         # Alternative binding
 
-# ============================================================================
-# Era 2: Embedding-Based Metrics
-# ============================================================================
-bert-score==0.3.13
-# MoverScore: Installed separately via setup.sh from GitHub
+# =============================================================================
+# Stage 2 - Semantic Metrics (BERTScore, MoverScore)
+# Models: roberta-large (~1.4GB), distilbert (~260MB)
+# =============================================================================
+bert-score==0.3.13          # BERTScore (Precision/Recall/F1)
+sentence-transformers==2.2.2 # Semantic Coverage (MiniLM ~80MB)
+# MoverScore: pip install moverscore (or install from GitHub)
 
-# ============================================================================
-# Era 3A: Logic Checkers & Era 3B: AI Simulators (API)
-# ============================================================================
-# Era 3A uses transformers + DeBERTa-v3 (already included above)
-# Era 3B uses H2OGPTE API for LLM-as-a-Judge metrics
-h2ogpte==1.6.54  # API client for Era 3B metrics (G-Eval, DAG, FactChecker)
-python-dotenv==1.0.0  # For loading API credentials from .env file
+# =============================================================================
+# Stage 1 - Faithfulness Metrics (NLI, FactCC, AlignScore)
+# Models: deberta-v3-base (~440MB), deberta-base-mnli (~440MB), AlignScore (~1.4GB)
+# =============================================================================
+# Uses transformers (above) - models download on first use
 
-# ============================================================================
-# NLP Utilities
-# ============================================================================
-spacy==3.7.5
-tqdm==4.66.5
-scikit-learn==1.5.2
+# =============================================================================
+# Stage 1 - Completeness (Coverage Score)
+# Model: en_core_web_sm (~12MB)
+# =============================================================================
+spacy==3.7.5                # Named Entity Recognition
+# Run after install: python -m spacy download en_core_web_sm
 
-# ============================================================================
+# =============================================================================
+# Stage 1 - API Metrics (G-Eval, DAG, Prometheus)
+# No local models - uses H2OGPTE API
+# =============================================================================
+h2ogpte==1.6.54             # H2OGPTE API client
+python-dotenv==1.0.0        # Load .env credentials
+
+# =============================================================================
 # HuggingFace Ecosystem
-# ============================================================================
-huggingface-hub==0.25.2
-datasets==3.0.0
-evaluate==0.4.3
+# =============================================================================
+huggingface-hub==0.25.2     # Model downloads
+datasets==3.0.0             # Dataset utilities
+evaluate==0.4.3             # Evaluation utilities
 
-# ============================================================================
-# Additional Dependencies
-# ============================================================================
-pyyaml==6.0.2
-regex==2024.9.11
-safetensors==0.4.5
-filelock==3.16.1
+# =============================================================================
+# Utilities
+# =============================================================================
+tqdm==4.66.5                # Progress bars
+scikit-learn==1.5.2         # ML utilities
+pyyaml==6.0.2               # Config parsing
+regex==2024.9.11            # Advanced regex
+safetensors==0.4.5          # Safe model loading
+filelock==3.16.1            # File locking
+
+# =============================================================================
+# NOT INCLUDED (and why)
+# =============================================================================
+# bleurt - TensorFlow/PyTorch conflicts
+# questeval - Cython dependency issues, abandoned (2022)
+# unieval - Fallback unreliable, use G-Eval instead

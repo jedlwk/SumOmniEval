@@ -11,6 +11,10 @@ import warnings
 # Suppress warnings for cleaner output
 warnings.filterwarnings('ignore')
 
+# Global cache for GPT-2 perplexity model (~600MB)
+_perplexity_model = None
+_perplexity_tokenizer = None
+
 
 def compute_rouge_scores(source: str, summary: str) -> Dict[str, float]:
     """
@@ -202,18 +206,22 @@ def compute_perplexity(source: str, summary: str) -> Dict[str, float]:
     Returns:
         Dictionary with key 'perplexity' containing the score.
     """
+    global _perplexity_model, _perplexity_tokenizer
+
     try:
         from transformers import GPT2LMHeadModel, GPT2TokenizerFast
         import torch
         import math
 
-        # Load GPT-2 model for perplexity calculation
-        model_id = "gpt2"
-        model = GPT2LMHeadModel.from_pretrained(model_id)
-        tokenizer = GPT2TokenizerFast.from_pretrained(model_id)
+        # Load GPT-2 model (cached globally to avoid reload overhead)
+        if _perplexity_model is None:
+            model_id = "gpt2"
+            _perplexity_model = GPT2LMHeadModel.from_pretrained(model_id)
+            _perplexity_tokenizer = GPT2TokenizerFast.from_pretrained(model_id)
+            _perplexity_model.eval()
 
-        # Set to evaluation mode
-        model.eval()
+        model = _perplexity_model
+        tokenizer = _perplexity_tokenizer
 
         # Encode the summary
         encodings = tokenizer(summary, return_tensors="pt", truncation=True, max_length=512)
@@ -241,12 +249,51 @@ def compute_perplexity(source: str, summary: str) -> Dict[str, float]:
         }
 
 
-def compute_all_era1_metrics(source: str, summary: str) -> Dict[str, Dict[str, float]]:
+def compute_chrf_score(reference: str, summary: str) -> Dict[str, float]:
     """
-    Compute all Era 1 metrics at once.
+    Compute chrF++ score (character n-gram F-score).
+
+    chrF++ uses character-level matching, making it more robust to:
+    - Morphological variations (word endings)
+    - Typos and minor spelling differences
+    - Languages with rich morphology
 
     Args:
-        source: The original source text.
+        reference: The reference text.
+        summary: The generated summary.
+
+    Returns:
+        Dictionary with chrF++ score.
+    """
+    try:
+        from sacrebleu.metrics import CHRF
+
+        chrf = CHRF(word_order=2)  # chrF++ includes word bigrams
+        score = chrf.sentence_score(summary, [reference])
+
+        return {
+            'chrf': round(score.score / 100, 4),  # Normalize to 0-1
+            'raw_score': round(score.score, 2)
+        }
+
+    except ImportError:
+        return {
+            'chrf': 0.0,
+            'error': 'sacrebleu not installed. Run: pip install sacrebleu'
+        }
+    except Exception as e:
+        return {
+            'chrf': 0.0,
+            'error': str(e)
+        }
+
+
+def compute_all_era1_metrics(source: str, summary: str) -> Dict[str, Dict[str, float]]:
+    """
+    Compute all Era 1 metrics at once (Lexical Conformance).
+
+    Args:
+        source: The reference text (for reference-based comparison).
         summary: The generated summary.
 
     Returns:
@@ -256,6 +303,7 @@ def compute_all_era1_metrics(source: str, summary: str) -> Dict[str, Dict[str, f
         'ROUGE': compute_rouge_scores(source, summary),
         'BLEU': compute_bleu_score(source, summary),
         'METEOR': compute_meteor_score(source, summary),
+        'chrF++': compute_chrf_score(source, summary),
         'Levenshtein': compute_levenshtein_score(source, summary),
         'Perplexity': compute_perplexity(source, summary)
     }

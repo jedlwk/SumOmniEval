@@ -1,141 +1,91 @@
-# SumOmniEval - Comprehensive Summary Evaluation Tool
+# SumOmniEval
 
-A complete toolkit for evaluating text summarization quality using **15 different metrics** across 3 evaluation eras.
+**Comprehensive Summarization Evaluation Framework**
+
+24 metrics across 2 evaluation stages to answer two questions:
+1. **Is this summary trustworthy?** (Stage 1: Source vs Summary)
+2. **Does it match expectations?** (Stage 2: Generated vs Reference)
+
+---
 
 ## Quick Start
 
-### 1. Install Dependencies
 ```bash
-pip3 install -r requirements.txt
-```
+# 1. Install dependencies
+pip install -r requirements.txt
 
-### 2. Configure API (Optional - for Era 3 metrics)
-Create a `.env` file or update the `.env.example` file in the project root:
-```bash
-H2OGPTE_API_KEY=your_api_key_here
-```
+# 2. Download spaCy model
+python -m spacy download en_core_web_sm
 
-### 3. Launch Application
-```bash
+# 3. (Optional) Configure API for LLM metrics
+cp .env.example .env
+# Edit .env with your H2OGPTE credentials
+
+# 4. Launch
 streamlit run app.py
 ```
-or
 
-```
-python3 -m streamlit run app.py
-```
-
-The app will open in your browser at `http://localhost:8501`
+The app opens at `http://localhost:8501`
 
 ---
 
-## What This Tool Does
+## What's Inside
 
-SumOmniEval evaluates summary quality using **15 metrics** organized into 3 evaluation eras:
+### Stage 1: Source vs Summary (12 metrics)
+Checks if the summary is **accurate** and **complete** based on the original source.
 
-| Era | Metrics | Type | Time | Purpose |
-|-----|---------|------|------|---------|
-| **Era 1: Word Overlap** | 5 | Local | ~2s | Basic n-gram matching |
-| **Era 2: Embeddings** | 2 | Local | ~10s | Semantic similarity |
-| **Era 3A: Logic Checkers** | 3 | 2 Local + 1 API | ~40s | Factual consistency |
-| **Era 3B: AI Simulators** | 5 | API | ~7min | Human-like evaluation |
+| Metric | Type | What It Checks |
+|--------|------|----------------|
+| NLI | Local | Does source logically support summary? |
+| FactCC | Local | Is it factually consistent? |
+| AlignScore | Local | Unified consistency score |
+| Coverage Score | Local | Are named entities preserved? |
+| Semantic Coverage | Local | How many source sentences covered? |
+| BERTScore Recall | Local | What % of source meaning captured? |
+| G-Eval (4 dims) | API | Relevance, Coherence, Faithfulness, Fluency |
+| DAG | API | 3-step decision tree evaluation |
+| Prometheus | API | Open-source LLM judge |
 
-**Total: 15 metrics (9 local + 6 API)**
+### Stage 2: Generated vs Reference (12 metrics)
+Compares your summary against a "gold standard" reference.
 
----
-
-## Evaluation Workflows
-
-### Fast & Free (Local Only - ~40 seconds)
-```
-✓ Era 1: ROUGE, BLEU, METEOR, Levenshtein, Perplexity
-✓ Era 2: BERTScore, MoverScore
-✓ Era 3A: NLI + FactCC (local models)
-Result: 9 metrics, no API calls
-```
-
-### Balanced (+ API Fact-Check - ~70 seconds)
-```
-✓ All local metrics
-✓ Era 3A: + FactChecker (API)
-Result: 10 metrics, 1 API call
-```
-
-### Comprehensive (Full Suite - ~8 minutes)
-```
-✓ All local metrics
-✓ Era 3A: All fact-checkers
-✓ Era 3B: G-Eval (4 dimensions) + DAG
-Result: 15 metrics, 6 API calls
-```
+| Metric | Type | What It Checks |
+|--------|------|----------------|
+| BERTScore | Local | Semantic similarity |
+| MoverScore | Local | Meaning transformation distance |
+| ROUGE-1/2/L | Local | Word and phrase overlap |
+| BLEU | Local | N-gram precision |
+| METEOR | Local | Matching with synonyms |
+| chrF++ | Local | Character-level F-score |
+| Levenshtein | Local | Edit distance |
+| Perplexity | Local | Fluency score |
 
 ---
 
-## Available Metrics
+## Evaluation Modes
 
-### Era 1: Word Overlap (5 metrics - Local)
-- **ROUGE** (1/2/L): N-gram overlap with reference
-- **BLEU**: Precision-based machine translation metric
-- **METEOR**: Semantic matching with synonyms
-- **Levenshtein**: Edit distance similarity
-- **Perplexity**: Language model fluency score
-
-### Era 2: Embeddings (2 metrics - Local)
-- **BERTScore**: Contextual embedding similarity (Precision/Recall/F1)
-- **MoverScore**: Optimal word alignment via Earth Mover's Distance
-
-### Era 3A: Logic Checkers (3 metrics)
-- **NLI** (DeBERTa-v3): Natural Language Inference - Local (~400MB)
-- **FactCC** (BERT): BERT-based consistency checker - Local (~400MB)
-- **FactChecker** (LLM): AI-powered fact-checking - API (0MB)
-
-### Era 3B: AI Simulators (5 metrics - API)
-**G-Eval (4 dimensions):**
-- **Faithfulness**: Are facts accurate and supported?
-- **Coherence**: Does the summary flow logically?
-- **Relevance**: Are main points captured?
-- **Fluency**: Is the writing clear and grammatical?
-
-**Decision Tree:**
-- **DAG** (DeepEval): Step-by-step evaluation (factual → completeness → clarity)
-
-**Prometheus:**
-- **Absolute Grading**: Direct assessment of a single response on a 1-5 scale
-- **Relative Grading** (Not Implemented): Pairwise comparison to determine which of two responses is superior
+| Mode | Metrics | Time | Requirements |
+|------|---------|------|--------------|
+| **Local Only** | 12 | ~30s | None |
+| **Full Suite** | 24 | ~2min | H2OGPTE API key |
 
 ---
 
-## Using the Application
+## Model Storage
 
-1. **Enter your text**:
-   - Source Document: The original text to summarize
-   - Summary: The summary to evaluate
+All local models download automatically on first use:
 
-2. **Load data** (optional):
-   - **Sample Data**: Use pre-configured examples (default: 3 samples)
-   - **Upload Your Dataset**: Upload CSV, JSON, Excel, or TSV files with multiple rows
-     - Upload file → Select Source column → Select Summary column
-     - Choose row from dropdown: "-- Select a row --", "Row 1", "Row 2", etc.
-     - Data loads automatically when row is selected
-     - Clear button returns to sample data
-   - See [docs/FILE_FORMATS.md](docs/FILE_FORMATS.md) for detailed guide
-   - Example dataset files in `examples/` folder (3 formats × 3 rows each)
+| Model | Size | Used By |
+|-------|------|---------|
+| roberta-large | ~1.4GB | BERTScore, AlignScore |
+| deberta-v3-base | ~440MB | NLI |
+| deberta-base-mnli | ~440MB | FactCC |
+| distilbert | ~260MB | MoverScore |
+| GPT-2 | ~600MB | Perplexity |
+| MiniLM-L6 | ~80MB | Semantic Coverage |
+| spaCy en_core_web_sm | ~12MB | Coverage Score |
 
-3. **Configure model** (if using API metrics):
-   - Select your preferred LLM from the sidebar
-   - Default: `meta-llama/Llama-3.3-70B-Instruct`
-   - Other options: Meta-Llama-3.1-70B, DeepSeek-R1
-
-4. **Click "Evaluate Summary"**
-   - All available metrics run automatically
-   - Local metrics (Era 1, 2, 3A) run first
-   - API metrics (Era 3B) run if API key is configured
-
-5. **View results**:
-   - Scores range from 0.00-1.00 (Era 1-3A) or 1-10 (Era 3B)
-   - Color-coded: 🟢 Green (good) | 🟡 Yellow (fair) | 🔴 Red (poor)
-   - Detailed explanations and reasoning for each metric
-   - Expand sections to learn more about each metric era
+**Total: ~5-6GB** (models cached after first download)
 
 ---
 
@@ -143,152 +93,99 @@ Result: 15 metrics, 6 API calls
 
 ```
 SumOmniEval/
-├── app.py                          # Main Streamlit application
-├── requirements.txt                # Python dependencies
-├── .env                            # API configuration (create this)
+├── app.py                      # Main Streamlit application
+├── requirements.txt            # Python dependencies
+├── METRICS.md                  # Complete metrics documentation
+├── .env.example                # API configuration template
 │
-├── src/
-│   ├── evaluators/
-│   │   ├── era1_basic.py          # ROUGE, BLEU, METEOR, etc.
-│   │   ├── era2_embeddings.py     # BERTScore, MoverScore
-│   │   ├── era3_logic_checkers.py # NLI, FactCC, FactChecker
-│   │   └── era3_llm_judge.py      # G-Eval, DAG
-│   └── utils/
-│       ├── helpers.py             # Shared utilities
-│       └── data_loader.py         # Sample data loading
+├── src/evaluators/
+│   ├── era1_word_overlap.py    # ROUGE, BLEU, METEOR, etc.
+│   ├── era2_embeddings.py      # BERTScore, MoverScore
+│   ├── era3_logic_checkers.py  # NLI, FactCC, AlignScore
+│   ├── era3_llm_judge.py       # G-Eval, DAG, Prometheus
+│   ├── era3_unieval.py         # UniEval (disabled)
+│   └── completeness_metrics.py # Semantic Coverage, BERTScore Recall
 │
-├── examples/                       # Example dataset files
-│   ├── example_dataset.csv        # CSV dataset (3 rows)
-│   ├── example_dataset.json       # JSON dataset (3 rows)
-│   └── example_dataset.xlsx       # Excel dataset (3 rows)
+├── tests/
+│   └── test_all_metrics.py     # Comprehensive test suite
 │
-├── tests/                          # All test scripts
-│   ├── README.md                  # Testing guide
-│   ├── test_all_new_metrics.py   # Comprehensive test suite
-│   ├── test_era3a_factchecker.py # Era 3A tests
-│   ├── test_era3b_individual.py  # Era 3B tests
-│   └── ...                        # Other test files
-│
-└── docs/                           # Documentation
-    ├── METRICS.md                 # Detailed metric explanations
-    ├── SETUP.md                   # Installation & troubleshooting
-    ├── FILE_FORMATS.md            # File upload format guide
-    └── CHANGELOG.md               # Version history
+└── examples/                   # Sample datasets (CSV, JSON, Excel)
 ```
+
+---
+
+## File Upload
+
+Supports CSV, JSON, Excel (.xlsx), and TSV files.
+
+1. Upload your file in the sidebar
+2. Map columns: Source, Summary, Reference (optional)
+3. Select a row to evaluate
+
+---
+
+## API Configuration
+
+For G-Eval, DAG, and Prometheus metrics:
+
+```bash
+# .env file
+H2OGPTE_API_KEY=your_key_here
+H2OGPTE_ADDRESS=https://your-instance.h2ogpte.com
+```
+
+**Available LLM Models:**
+- `meta-llama/Llama-3.3-70B-Instruct` (default)
+- `meta-llama/Meta-Llama-3.1-70B-Instruct`
+- `deepseek-ai/DeepSeek-R1`
 
 ---
 
 ## Running Tests
 
 ```bash
-# Test all metrics (comprehensive)
-python3 tests/test_all_new_metrics.py
+# Run all metric tests
+python -m pytest tests/test_all_metrics.py -v
 
-# Test specific eras
-python3 tests/test_era3a_factchecker.py
-python3 tests/test_era3b_individual.py
-
-# Test API connectivity
-python3 tests/test_h2ogpte_api.py
+# Quick syntax check
+python -m py_compile app.py
 ```
-
-See **[tests/README.md](tests/README.md)** for detailed testing documentation.
-
----
-
-## Documentation
-
-- **[METRICS.md](docs/METRICS.md)** - Detailed metric explanations and scoring guidelines
-- **[SETUP.md](docs/SETUP.md)** - Installation, API configuration, troubleshooting
-- **[CHANGELOG.md](docs/CHANGELOG.md)** - Version history and recent updates
 
 ---
 
 ## Requirements
 
-- **Python**: 3.8 or higher
-- **Disk Space**: ~3GB (for local models)
-- **RAM**: 8GB+ recommended
-- **Internet**: Required for API metrics (Era 3A FactChecker, Era 3B)
-- **API Key**: Optional (H2OGPTE for Era 3 API metrics)
+- Python 3.8+
+- 8GB+ RAM recommended
+- ~6GB disk space (for models)
+- Internet connection (for API metrics)
 
 ---
 
-## Implementation Coverage
+## Documentation
 
-| Metric | Status | Implementation |
-|--------|--------|----------------|
-| Era 1: Word Overlap | ✅ Complete | All 5 metrics (ROUGE, BLEU, METEOR, Levenshtein, Perplexity) |
-| Era 2: Embeddings | ✅ Complete | BERTScore + MoverScore |
-| Era 3A: NLI | ✅ Complete | DeBERTa-v3 (~400MB) |
-| Era 3A: FactCC | ✅ Complete | BERT-based (~400MB) |
-| Era 3A: FactChecker | ✅ Complete | LLM-powered (API) |
-| Era 3A: AlignScore | ❌ Skipped | Model size exceeds 1GB budget |
-| Era 3A: QuestEval | ❌ Skipped | Cython dependency conflicts |
-| Era 3B: G-Eval | ✅ Complete | All 4 dimensions (Faithfulness, Coherence, Relevance, Fluency) |
-| Era 3B: DAG | ✅ Complete | Decision tree evaluation |
-| Era 3B: Prometheus | ❌ Skipped | Complex local model setup |
-
-**Total**: 15 metrics implemented (9 local + 6 API)
-**Skipped**: 3 metrics due to technical constraints
+- **[METRICS.md](METRICS.md)** - Complete guide to all 24 metrics
+- **[docs/SETUP.md](docs/SETUP.md)** - Installation troubleshooting
 
 ---
 
-## Technical Details
+## Metrics Not Implemented
 
-### Local Metrics (Era 1, 2, 3A)
-- Run on CPU, no internet required
-- Models auto-download on first use
-- Cached for future runs
+| Metric | Reason |
+|--------|--------|
+| BLEURT | TensorFlow/PyTorch conflicts |
+| QuestEval | Cython dependency issues |
+| UniEval | Fallback implementation unreliable |
 
-### API Metrics (Era 3A FactChecker, Era 3B)
-- Require H2OGPTE API key and internet
-- Use state-of-the-art LLMs (Llama-3.3-70B by default)
-- Configurable model selection
-
-### Performance
-- **Local only**: ~40 seconds for 9 metrics
-- **+ FactChecker**: ~70 seconds for 10 metrics
-- **Full suite**: ~8 minutes for 15 metrics (API latency dependent)
-
-### Model Sizes
-- Era 1: ~50MB
-- Era 2: ~1.2GB (BERTScore + MoverScore)
-- Era 3A NLI: ~400MB
-- Era 3A FactCC: ~400MB
-- Era 3B: 0MB (API only)
-
-**Total local storage**: ~2.05GB
+See [METRICS.md](METRICS.md) for alternatives.
 
 ---
 
-## Quick Reference
+## Version
 
-### No API Key?
-Use **Era 1 + 2 + 3A (NLI + FactCC)** for 9 free local metrics.
+- **v2.0** - 24 metrics, educational UI
+- Last updated: 2026-01-29
 
-### Have API Key?
-Enable **Era 3B** for human-like AI evaluation across 4 dimensions.
-
-### Need Fast Results?
-Use **Era 1 + 2** for instant evaluation (12 seconds).
-
-### Need Maximum Quality?
-Enable **all 15 metrics** for comprehensive multi-perspective evaluation.
-
----
-
-## License
-
-See LICENSE file for details.
-
-## Contributing
-
-Questions or contributions? Check the documentation in `docs/` or create an issue.
-
----
-
-**Version**: 1.0
-**Last Updated**: 2026-01-25
-**Total Metrics**: 15 (9 local + 6 API)
-**Ready to use**: `streamlit run app.py`
+```
+streamlit run app.py
+```

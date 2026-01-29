@@ -201,16 +201,16 @@ SumOmniEval/
 │
 ├── src/                        # Source code
 │   ├── evaluators/
-│   │   ├── era1_basic.py      # Era 1 metrics (ROUGE, BLEU, etc.)
+│   │   ├── era1_word_overlap.py  # Era 1 metrics (ROUGE, BLEU, etc.)
 │   │   ├── era2_embeddings.py # Era 2 metrics (BERTScore, MoverScore)
 │   │   ├── era3_logic_checkers.py  # Era 3A (NLI, FactCC, FactChecker)
 │   │   └── era3_llm_judge.py  # Era 3B (G-Eval, DAG)
 │   └── utils/
-│       └── helpers.py         # Shared utilities
+│       └── data_loader.py     # Data loading utilities
 │
 ├── tests/                      # All test scripts
 │   ├── README.md              # Testing guide
-│   └── test_all_new_metrics.py  # Main test suite
+│   └── test_all_metrics.py    # Main test suite
 │
 └── docs/                       # Documentation
     ├── METRICS.md             # Detailed metric explanations
@@ -228,7 +228,7 @@ SumOmniEval/
 - **.env** - API configuration (create if using API metrics)
 
 ### For Understanding Implementation
-- **src/evaluators/era1_basic.py** - Basic word overlap metrics
+- **src/evaluators/era1_word_overlap.py** - Basic word overlap metrics
 - **src/evaluators/era2_embeddings.py** - Embedding-based metrics
 - **src/evaluators/era3_logic_checkers.py** - Fact-checking metrics
 - **src/evaluators/era3_llm_judge.py** - AI evaluation metrics

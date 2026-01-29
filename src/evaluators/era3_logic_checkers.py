@@ -3,6 +3,7 @@ Era 3 Group A: Logic Checkers (Truth Squad).
 
 This module implements logic-based consistency checking:
 - NLI (DeBERTa-v3): Local Natural Language Inference
+- AlignScore: Unified alignment-based factual consistency metric
 - FactChecker (API): API-based fact-checking using LLMs
 """
 
@@ -14,6 +15,10 @@ import warnings
 os.environ['CUDA_VISIBLE_DEVICES'] = ''
 
 warnings.filterwarnings('ignore')
+
+# Global model caches to avoid reloading on each call
+_nli_pipeline = None
+_factcc_pipeline = None
 
 
 def compute_nli_score(
@@ -37,6 +42,8 @@ def compute_nli_score(
         Dictionary with 'nli_score' (0-1) and 'label' (classification).
         Higher score = more consistent/entailed.
     """
+    global _nli_pipeline
+
     try:
         from transformers import (
             AutoModelForSequenceClassification,
@@ -44,17 +51,18 @@ def compute_nli_score(
             pipeline
         )
 
-        # Load NLI model
-        tokenizer = AutoTokenizer.from_pretrained(model_name)
-        model = AutoModelForSequenceClassification.from_pretrained(model_name)
+        # Load NLI model (cached globally)
+        if _nli_pipeline is None:
+            tokenizer = AutoTokenizer.from_pretrained(model_name)
+            model = AutoModelForSequenceClassification.from_pretrained(model_name)
+            _nli_pipeline = pipeline(
+                "text-classification",
+                model=model,
+                tokenizer=tokenizer,
+                device=-1  # Force CPU
+            )
 
-        # Create NLI pipeline (CPU-only)
-        nli_pipeline = pipeline(
-            "text-classification",
-            model=model,
-            tokenizer=tokenizer,
-            device=-1  # Force CPU
-        )
+        nli_pipeline = _nli_pipeline
 
         # Truncate long texts (DeBERTa max length: 512 tokens)
         max_words = 400  # Conservative limit
@@ -270,6 +278,9 @@ def compute_factcc_score(source: str, summary: str) -> Dict:
     checking in summarization. It predicts if a summary is consistent with
     the source document.
 
+    Note: Uses DeBERTa-base-MNLI as the original FactCC checkpoint has
+    compatibility issues. This provides similar functionality.
+
     Args:
         source: The original source text.
         summary: The generated summary.
@@ -277,6 +288,8 @@ def compute_factcc_score(source: str, summary: str) -> Dict:
     Returns:
         Dictionary with 'score' (0-1) and 'label'.
     """
+    global _factcc_pipeline
+
     try:
         from transformers import (
             AutoModelForSequenceClassification,
@@ -284,21 +297,20 @@ def compute_factcc_score(source: str, summary: str) -> Dict:
             pipeline
         )
 
-        # FactCC uses a fine-tuned BERT model
-        # Note: The official model is "manueltonneau/factCC-checkpoint"
-        # or we can use a general consistency model
-        model_name = "microsoft/deberta-base-mnli"  # Good alternative
+        # Load FactCC model (cached globally)
+        # Uses deberta-base-mnli as alternative to original FactCC checkpoint
+        if _factcc_pipeline is None:
+            model_name = "microsoft/deberta-base-mnli"
+            tokenizer = AutoTokenizer.from_pretrained(model_name)
+            model = AutoModelForSequenceClassification.from_pretrained(model_name)
+            _factcc_pipeline = pipeline(
+                "text-classification",
+                model=model,
+                tokenizer=tokenizer,
+                device=-1  # Force CPU
+            )
 
-        tokenizer = AutoTokenizer.from_pretrained(model_name)
-        model = AutoModelForSequenceClassification.from_pretrained(model_name)
-
-        # Create classification pipeline
-        classifier = pipeline(
-            "text-classification",
-            model=model,
-            tokenizer=tokenizer,
-            device=-1  # Force CPU
-        )
+        classifier = _factcc_pipeline
 
         # Truncate long texts
         max_words = 400
@@ -348,21 +360,202 @@ def _interpret_factcc_score(score: float) -> str:
         return "Inconsistent"
 
 
+# Global AlignScore model cache to avoid reloading
+_alignscore_model = None
+_alignscore_tokenizer = None
+
+
+def compute_alignscore(
+    source: str,
+    summary: str,
+    model_name: str = "liuyanyi/AlignScore-large-hf"
+) -> Dict:
+    """
+    Compute AlignScore for factual consistency evaluation.
+
+    AlignScore is a unified alignment-based factual consistency metric that
+    achieves state-of-the-art performance across multiple benchmarks. It uses
+    a RoBERTa model fine-tuned on diverse alignment tasks.
+
+    Paper: "AlignScore: Evaluating Factual Consistency with a Unified Alignment Function"
+
+    Uses the HuggingFace model from: https://huggingface.co/liuyanyi/AlignScore-large-hf
+
+    Args:
+        source: The original source text (context/premise).
+        summary: The generated summary (claim).
+        model_name: HuggingFace model name (default: liuyanyi/AlignScore-large-hf).
+
+    Returns:
+        Dictionary with 'score' (0-1), higher = more factually consistent.
+    """
+    global _alignscore_model, _alignscore_tokenizer
+
+    try:
+        import torch
+        from transformers import AutoModelForSequenceClassification, RobertaTokenizer
+
+        # Load model and tokenizer if not cached
+        if _alignscore_model is None:
+            _alignscore_tokenizer = RobertaTokenizer.from_pretrained('roberta-large')
+            _alignscore_model = AutoModelForSequenceClassification.from_pretrained(
+                model_name,
+                trust_remote_code=True
+            )
+            _alignscore_model.eval()
+
+        # Tokenize inputs
+        inputs = _alignscore_tokenizer(
+            source,
+            summary,
+            return_tensors='pt',
+            truncation=True,
+            max_length=512
+        )
+
+        # Get score
+        with torch.no_grad():
+            outputs = _alignscore_model(**inputs)
+            score = outputs.reg_label_logits.item()
+
+        return {
+            'score': round(float(score), 4),
+            'interpretation': _interpret_alignscore(float(score))
+        }
+
+    except ImportError as e:
+        return {
+            'score': None,
+            'error': f'Required packages not installed. Error: {str(e)}'
+        }
+    except Exception as e:
+        return {
+            'score': None,
+            'error': str(e)
+        }
+
+
+def _interpret_alignscore(score: float) -> str:
+    """Interpret AlignScore for human readability."""
+    if score >= 0.9:
+        return "Fully Consistent"
+    elif score >= 0.7:
+        return "Highly Consistent"
+    elif score >= 0.5:
+        return "Mostly Consistent"
+    elif score >= 0.3:
+        return "Partially Consistent"
+    else:
+        return "Inconsistent"
+
+
+def compute_coverage_score(source: str, summary: str) -> Dict:
+    """
+    Compute Coverage Score using Named Entity Recognition (NER).
+
+    Measures how many named entities (People, Places, Organizations, Dates, etc.)
+    from the source document appear in the summary. High coverage indicates
+    the summary captures the key factual elements.
+
+    Args:
+        source: The original source text.
+        summary: The generated summary.
+
+    Returns:
+        Dictionary with coverage metrics.
+    """
+    try:
+        import spacy
+
+        # Load spaCy English model
+        try:
+            nlp = spacy.load("en_core_web_sm")
+        except OSError:
+            # Model not installed
+            return {
+                'score': None,
+                'error': 'spaCy model not installed. Run: python -m spacy download en_core_web_sm'
+            }
+
+        # Extract entities from source
+        source_doc = nlp(source)
+        source_entities = set()
+        for ent in source_doc.ents:
+            source_entities.add(ent.text.lower())
+
+        if not source_entities:
+            return {
+                'score': 1.0,  # If no entities in source, summary trivially covers all
+                'source_entities': 0,
+                'covered_entities': 0,
+                'interpretation': 'No named entities in source'
+            }
+
+        # Extract entities from summary
+        summary_doc = nlp(summary)
+        summary_entities = set()
+        for ent in summary_doc.ents:
+            summary_entities.add(ent.text.lower())
+
+        # Calculate coverage
+        covered = source_entities.intersection(summary_entities)
+        coverage_score = len(covered) / len(source_entities)
+
+        return {
+            'score': round(coverage_score, 4),
+            'source_entities': len(source_entities),
+            'covered_entities': len(covered),
+            'missing_entities': list(source_entities - summary_entities)[:5],  # Show up to 5 missing
+            'interpretation': _interpret_coverage_score(coverage_score)
+        }
+
+    except ImportError:
+        return {
+            'score': None,
+            'error': 'spaCy not installed. Run: pip install spacy'
+        }
+    except Exception as e:
+        return {
+            'score': None,
+            'error': str(e)
+        }
+
+
+def _interpret_coverage_score(score: float) -> str:
+    """Interpret Coverage Score for human readability."""
+    if score >= 0.9:
+        return "Excellent Coverage"
+    elif score >= 0.7:
+        return "Good Coverage"
+    elif score >= 0.5:
+        return "Partial Coverage"
+    elif score >= 0.3:
+        return "Low Coverage"
+    else:
+        return "Poor Coverage"
+
+
 def compute_all_era3_metrics(
     source: str,
     summary: str,
     use_factchecker: bool = False,
     use_factcc: bool = False,
+    use_alignscore: bool = False,
+    use_coverage: bool = False,
+    use_unieval: bool = False,
     factchecker_model: Optional[str] = None
 ) -> Dict[str, Dict[str, float]]:
     """
-    Compute all Era 3 Group A metrics.
+    Compute all Era 3 Group A metrics (Faithfulness checks).
 
     Args:
         source: The original source text.
         summary: The generated summary.
         use_factchecker: Whether to use API-based fact-checker.
         use_factcc: Whether to use FactCC (BERT-based).
+        use_alignscore: Whether to use AlignScore (unified alignment metric).
+        use_coverage: Whether to use Coverage Score (NER overlap).
+        use_unieval: Whether to use UniEval (multi-dimensional evaluator).
         factchecker_model: LLM model for fact-checking (optional).
 
     Returns:
@@ -375,6 +568,19 @@ def compute_all_era3_metrics(
     # Add FactCC if enabled
     if use_factcc:
         results['FactCC'] = compute_factcc_score(source, summary)
+
+    # Add AlignScore if enabled
+    if use_alignscore:
+        results['AlignScore'] = compute_alignscore(source, summary)
+
+    # Add Coverage Score if enabled (for completeness check)
+    if use_coverage:
+        results['Coverage'] = compute_coverage_score(source, summary)
+
+    # Add UniEval if enabled (BLEURT backup - multi-dimensional evaluation)
+    if use_unieval:
+        from src.evaluators.era3_unieval import compute_unieval
+        results['UniEval'] = compute_unieval(source, summary)
 
     # Add API-based fact-checker if enabled
     if use_factchecker:
