@@ -26,7 +26,15 @@ from io import BytesIO
 
 # Check if H2OGPTE API is available
 try:
-    from src.evaluators.era3_llm_judge import LLMJudgeEvaluator
+    from src.evaluators.era3_llm_judge import (
+        evaluate_faithfulness,
+        evaluate_coherence,
+        evaluate_relevance,
+        evaluate_fluency,
+        evaluate_dag,
+        evaluate_prometheus,
+        evaluate_all
+    )
     from dotenv import load_dotenv
     load_dotenv()
     import os
@@ -552,7 +560,7 @@ def display_results(results: Dict[str, Dict[str, Any]]):
         col1, col2 = st.columns([1, 2])
         with col1:
             nli_score = faith_results.get("NLI", {})
-            if "error" not in nli_score:
+            if nli_score.get('error') is None:
                 score_val = nli_score.get('nli_score', 0)
                 st.markdown(f"**NLI Score:** {format_score_display(score_val, 'general', 1.0)}", unsafe_allow_html=True)
             else:
@@ -566,7 +574,7 @@ def display_results(results: Dict[str, Dict[str, Any]]):
             col1, col2 = st.columns([1, 2])
             with col1:
                 factcc_score = faith_results.get("FactCC", {})
-                if "error" not in factcc_score and factcc_score.get('score') is not None:
+                if factcc_score.get('error') is None and factcc_score.get('score') is not None:
                     st.markdown(f"**FactCC:** {format_score_display(factcc_score['score'], 'general', 1.0)}", unsafe_allow_html=True)
                 else:
                     st.warning("FactCC unavailable")
@@ -579,7 +587,7 @@ def display_results(results: Dict[str, Dict[str, Any]]):
             col1, col2 = st.columns([1, 2])
             with col1:
                 align_score = faith_results.get("AlignScore", {})
-                if "error" not in align_score and align_score.get('score') is not None:
+                if align_score.get('error') is None and align_score.get('score') is not None:
                     st.markdown(f"**AlignScore:** {format_score_display(align_score['score'], 'general', 1.0)}", unsafe_allow_html=True)
                 else:
                     st.warning("AlignScore unavailable")
@@ -592,7 +600,7 @@ def display_results(results: Dict[str, Dict[str, Any]]):
             col1, col2 = st.columns([1, 2])
             coverage_result = faith_results.get("Coverage", {})
             with col1:
-                if "error" not in coverage_result and coverage_result.get('score') is not None:
+                if coverage_result.get('error') is None and coverage_result.get('score') is not None:
                     st.markdown(f"**Entity Coverage:** {format_score_display(coverage_result['score'], 'general', 1.0)}", unsafe_allow_html=True)
                     st.caption(f"{coverage_result.get('covered_entities', 0)}/{coverage_result.get('source_entities', 0)} entities")
                 else:
@@ -607,8 +615,8 @@ def display_results(results: Dict[str, Dict[str, Any]]):
         # Faithfulness Score Guide
         st.markdown("---")
         nli_val = faith_results.get("NLI", {}).get('nli_score', 0)
-        factcc_val = faith_results.get("FactCC", {}).get('score', 0) if faith_results.get("FactCC", {}).get('score') else 0
-        align_val = faith_results.get("AlignScore", {}).get('score', 0) if faith_results.get("AlignScore", {}).get('score') else 0
+        factcc_val = faith_results.get("FactCC", {}).get('score', 0) if faith_results.get("FactCC", {}).get('error') is None else 0
+        align_val = faith_results.get("AlignScore", {}).get('score', 0) if faith_results.get("AlignScore", {}).get('error') is None else 0
         avg_faith = (nli_val + factcc_val + align_val) / 3 if (nli_val and factcc_val and align_val) else 0
 
         if avg_faith >= 0.7:
@@ -650,7 +658,7 @@ def display_results(results: Dict[str, Dict[str, Any]]):
                 col1, col2 = st.columns([1, 2])
                 with col1:
                     sc_result = local_comp["SemanticCoverage"]
-                    if "error" not in sc_result and sc_result.get('score') is not None:
+                    if sc_result.get('error') is None and sc_result.get('score') is not None:
                         st.markdown(f"**Semantic Coverage:** {format_score_display(sc_result['score'], 'general', 1.0)}", unsafe_allow_html=True)
                         st.markdown(f"**Sentences:** {sc_result.get('covered_sentences', 0)}/{sc_result.get('source_sentences', 0)} covered")
                     else:
@@ -664,7 +672,7 @@ def display_results(results: Dict[str, Dict[str, Any]]):
                 col1, col2 = st.columns([1, 2])
                 with col1:
                     bs_result = local_comp["BERTScoreRecall"]
-                    if "error" not in bs_result and bs_result.get('recall') is not None:
+                    if bs_result.get('error') is None and bs_result.get('recall') is not None:
                         st.markdown(f"**BERTScore Recall:** {format_score_display(bs_result['recall'], 'bertscore', 1.0)}", unsafe_allow_html=True)
                     else:
                         st.warning(f"⚠️ {bs_result.get('error', 'No result')}")
@@ -683,7 +691,7 @@ def display_results(results: Dict[str, Dict[str, Any]]):
                 col1, col2 = st.columns([1, 2])
                 with col1:
                     rel_result = comp_results.get("relevance", {})
-                    if "error" not in rel_result and rel_result.get('score') is not None:
+                    if rel_result.get('error') is None and rel_result.get('score') is not None:
                         raw_score = rel_result.get('raw_score', rel_result['score'] * 10)
                         st.markdown(f"**G-Eval Relevance:** {format_score_display(raw_score, 'geval', 10.0)}", unsafe_allow_html=True)
                     else:
@@ -697,7 +705,7 @@ def display_results(results: Dict[str, Dict[str, Any]]):
                 col1, col2 = st.columns([1, 2])
                 with col1:
                     coh_result = comp_results.get("coherence", {})
-                    if "error" not in coh_result and coh_result.get('score') is not None:
+                    if coh_result.get('error') is None and coh_result.get('score') is not None:
                         raw_score = coh_result.get('raw_score', coh_result['score'] * 10)
                         st.markdown(f"**G-Eval Coherence:** {format_score_display(raw_score, 'geval', 10.0)}", unsafe_allow_html=True)
                     else:
@@ -710,7 +718,7 @@ def display_results(results: Dict[str, Dict[str, Any]]):
                 col1, col2 = st.columns([1, 2])
                 with col1:
                     faith_result = comp_results.get("faithfulness", {})
-                    if "error" not in faith_result and faith_result.get('score') is not None:
+                    if faith_result.get('error') is None and faith_result.get('score') is not None:
                         raw_score = faith_result.get('raw_score', faith_result['score'] * 10)
                         st.markdown(f"**G-Eval Faithfulness:** {format_score_display(raw_score, 'geval', 10.0)}", unsafe_allow_html=True)
                     else:
@@ -723,7 +731,7 @@ def display_results(results: Dict[str, Dict[str, Any]]):
                 col1, col2 = st.columns([1, 2])
                 with col1:
                     flu_result = comp_results.get("fluency", {})
-                    if "error" not in flu_result and flu_result.get('score') is not None:
+                    if flu_result.get('error') is None and flu_result.get('score') is not None:
                         raw_score = flu_result.get('raw_score', flu_result['score'] * 10)
                         st.markdown(f"**G-Eval Fluency:** {format_score_display(raw_score, 'geval', 10.0)}", unsafe_allow_html=True)
                     else:
@@ -816,8 +824,8 @@ def display_results(results: Dict[str, Dict[str, Any]]):
     has_holistic = "completeness" in results and results["completeness"]
     if has_holistic:
         comp_results = results["completeness"]
-        has_dag = "dag" in comp_results and "error" not in comp_results.get("dag", {})
-        has_prometheus = "prometheus" in comp_results and "error" not in comp_results.get("prometheus", {})
+        has_dag = "dag" in comp_results and comp_results.get("dag", {}).get('error') is None
+        has_prometheus = "prometheus" in comp_results and comp_results.get("prometheus", {}).get('error') is None
 
         if has_dag or has_prometheus:
             st.markdown("---")
@@ -933,7 +941,7 @@ def display_results(results: Dict[str, Dict[str, Any]]):
                 st.caption("Semantic similarity via embeddings")
 
                 bert_scores = sem_results.get("BERTScore", {})
-                if "error" not in bert_scores:
+                if bert_scores.get('error') is None:
                     st.markdown(f"- Precision: {format_score_display(bert_scores.get('precision', 0), 'bertscore')}", unsafe_allow_html=True)
                     st.markdown(f"- Recall: {format_score_display(bert_scores.get('recall', 0), 'bertscore')}", unsafe_allow_html=True)
                     st.markdown(f"- F1: {format_score_display(bert_scores.get('f1', 0), 'bertscore')}", unsafe_allow_html=True)
@@ -945,7 +953,7 @@ def display_results(results: Dict[str, Dict[str, Any]]):
                 st.caption("Semantic alignment distance")
 
                 mover_score = sem_results.get("MoverScore", {})
-                if "error" not in mover_score:
+                if mover_score.get('error') is None:
                     st.markdown(f"- Score: {format_score_display(mover_score.get('moverscore', 0))}", unsafe_allow_html=True)
                 else:
                     st.error(f"Error: {mover_score['error']}")
@@ -988,7 +996,7 @@ def display_results(results: Dict[str, Dict[str, Any]]):
             with col1:
                 st.markdown("**ROUGE Scores**")
                 rouge_scores = lex_results.get("ROUGE", {})
-                if "error" not in rouge_scores:
+                if rouge_scores.get('error') is None:
                     st.markdown(f"- ROUGE-1: {format_score_display(rouge_scores.get('rouge1', 0))}", unsafe_allow_html=True)
                     st.markdown(f"- ROUGE-2: {format_score_display(rouge_scores.get('rouge2', 0))}", unsafe_allow_html=True)
                     st.markdown(f"- ROUGE-L: {format_score_display(rouge_scores.get('rougeL', 0))}", unsafe_allow_html=True)
@@ -998,21 +1006,21 @@ def display_results(results: Dict[str, Dict[str, Any]]):
             with col2:
                 st.markdown("**BLEU Score**")
                 bleu_score = lex_results.get("BLEU", {})
-                if "error" not in bleu_score:
+                if bleu_score.get('error') is None:
                     st.markdown(f"- BLEU: {format_score_display(bleu_score.get('bleu', 0), 'bleu')}", unsafe_allow_html=True)
                 else:
                     st.error(f"Error: {bleu_score['error']}")
 
                 st.markdown("**METEOR Score**")
                 meteor_score = lex_results.get("METEOR", {})
-                if "error" not in meteor_score:
+                if meteor_score.get('error') is None:
                     st.markdown(f"- METEOR: {format_score_display(meteor_score.get('meteor', 0))}", unsafe_allow_html=True)
                 else:
                     st.error(f"Error: {meteor_score['error']}")
 
                 st.markdown("**chrF++ Score**")
                 chrf_score = lex_results.get("chrF++", {})
-                if "error" not in chrf_score:
+                if chrf_score.get('error') is None:
                     st.markdown(f"- chrF++: {format_score_display(chrf_score.get('chrf', 0))}", unsafe_allow_html=True)
                 else:
                     st.error(f"Error: {chrf_score['error']}")
@@ -1020,14 +1028,14 @@ def display_results(results: Dict[str, Dict[str, Any]]):
             with col3:
                 st.markdown("**Levenshtein Similarity**")
                 lev_score = lex_results.get("Levenshtein", {})
-                if "error" not in lev_score:
+                if lev_score.get('error') is None:
                     st.markdown(f"- Similarity: {format_score_display(lev_score.get('levenshtein', 0))}", unsafe_allow_html=True)
                 else:
                     st.error(f"Error: {lev_score['error']}")
 
                 st.markdown("**Perplexity (Fluency)**")
                 perp_score = lex_results.get("Perplexity", {})
-                if "error" not in perp_score:
+                if perp_score.get('error') is None:
                     st.markdown(f"- Fluency: {format_score_display(perp_score.get('normalized_score', 0))}", unsafe_allow_html=True)
                 else:
                     st.warning(f"⚠️ {perp_score.get('error', 'N/A')}")
@@ -1085,9 +1093,6 @@ def batch_evaluate_dataset(df: pd.DataFrame, source_col: str, reference_col: str
     results_df['dag_score'] = None
     results_df['prometheus_score'] = None
 
-    # Create LLM Judge evaluator
-    evaluator = LLMJudgeEvaluator(model_name=model_name)
-
     total_rows = len(df)
 
     for row_num, (idx, row) in enumerate(df.iterrows(), start=1):
@@ -1101,27 +1106,51 @@ def batch_evaluate_dataset(df: pd.DataFrame, source_col: str, reference_col: str
 
         try:
             # G-Eval Faithfulness (this serves as our fact-checking metric)
-            faithfulness_result = evaluator.evaluate_faithfulness(source_text, summary_text)
+            faithfulness_result = evaluate_faithfulness(
+                summary=summary_text,
+                source=source_text,
+                model_name=model_name
+            )
             results_df.at[idx, 'geval_faithfulness'] = faithfulness_result.get('score', None)
 
             # G-Eval Coherence
-            coherence_result = evaluator.evaluate_coherence(summary_text)
+            coherence_result = evaluate_coherence(
+                summary=summary_text,
+                source=source_text,
+                model_name=model_name
+            )
             results_df.at[idx, 'geval_coherence'] = coherence_result.get('score', None)
 
             # G-Eval Relevance
-            relevance_result = evaluator.evaluate_relevance(source_text, summary_text)
+            relevance_result = evaluate_relevance(
+                summary=summary_text,
+                source=source_text,
+                model_name=model_name
+            )
             results_df.at[idx, 'geval_relevance'] = relevance_result.get('score', None)
 
             # G-Eval Fluency
-            fluency_result = evaluator.evaluate_fluency(summary_text)
+            fluency_result = evaluate_fluency(
+                summary=summary_text,
+                source=source_text,
+                model_name=model_name
+            )
             results_df.at[idx, 'geval_fluency'] = fluency_result.get('score', None)
 
             # DAG
-            dag_result = evaluator.evaluate_dag(source_text, summary_text)
+            dag_result = evaluate_dag(
+                summary=summary_text,
+                source=source_text,
+                model_name=model_name
+            )
             results_df.at[idx, 'dag_score'] = dag_result.get('raw_score', None)
 
             # Prometheus
-            prometheus_result = evaluator.evaluate_prometheus(source_text, summary_text, reference_text)
+            prometheus_result = evaluate_prometheus(
+                summary=summary_text,
+                reference_summary=reference_text,
+                model_name=model_name
+            )
             results_df.at[idx, 'prometheus_score'] = prometheus_result.get('score', None)
 
 
@@ -1669,8 +1698,8 @@ def main():
 
                     with st.spinner(spinner_text):
                         results["faithfulness"] = compute_all_era3_metrics(
-                            source_text,
-                            summary_text,
+                            summary=summary_text,
+                            source=source_text,
                             use_factcc=use_factcc,
                             use_alignscore=use_alignscore,
                             use_coverage=use_coverage,
@@ -1682,8 +1711,8 @@ def main():
                 # Part 1B: Completeness (Local) - Semantic Coverage metrics
                 with st.spinner("📦 Part 1: Completeness Check (Semantic Coverage + BERTScore Recall)..."):
                     results["completeness_local"] = compute_all_completeness_metrics(
-                        source_text,
-                        summary_text,
+                        summary=summary_text,
+                        source=source_text,
                         use_semantic_coverage=True,
                         use_bertscore_recall=True,
                         use_bartscore=False  # Skip BARTScore for now (large model)
@@ -1698,11 +1727,11 @@ def main():
 
                     with st.spinner(spinner_text):
                         try:
-                            evaluator = LLMJudgeEvaluator(model_name=st.session_state.selected_model)
-                            results["completeness"] = evaluator.evaluate_all(
-                                source_text,
-                                reference_text if has_reference else "",
-                                summary_text,
+                            results["completeness"] = evaluate_all(
+                                summary=summary_text,
+                                source=source_text,
+                                reference_summary=reference_text if has_reference else None,
+                                model_name=st.session_state.selected_model,
                                 timeout=90,
                                 include_dag=use_dag,
                                 include_prometheus=use_prometheus
@@ -1721,16 +1750,16 @@ def main():
                     if run_era2:
                         with st.spinner("🧠 Part 2: Semantic Conformance (BERTScore + MoverScore)..."):
                             results["semantic"] = compute_all_era2_metrics(
-                                reference_text,  # Compare against reference, not source
-                                summary_text
+                                summary=summary_text,
+                                reference_summary=reference_text,  # Compare against reference, not source
                             )
 
                     # Part 2B: Lexical Conformance (ROUGE, BLEU, METEOR)
                     if run_era1:
                         with st.spinner("📝 Part 2: Lexical Conformance (ROUGE, BLEU, METEOR)..."):
                             results["lexical"] = compute_all_era1_metrics(
-                                reference_text,  # Compare against reference, not source
-                                summary_text
+                                summary=summary_text,
+                                reference_summary=reference_text,  # Compare against reference, not source
                             )
 
             st.session_state.results = results

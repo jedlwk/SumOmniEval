@@ -77,7 +77,10 @@ for i, test_case in enumerate(test_cases, 1):
     # Test 1: NLI (Local)
     print("1️⃣  NLI (DeBERTa-v3) - Local")
     print("-" * 80)
-    nli_result = compute_nli_score(test_case['source'], test_case['summary'])
+    nli_result = compute_nli_score(
+        summary=test_case['summary'],
+        source=test_case['source']
+        )
     if 'error' in nli_result:
         print(f"   ❌ Error: {nli_result['error']}")
     else:
@@ -89,8 +92,8 @@ for i, test_case in enumerate(test_cases, 1):
     print("\n2️⃣  FactChecker (API-based)")
     print("-" * 80)
     fc_result = compute_factchecker_score(
-        test_case['source'],
-        test_case['summary'],
+        summary=test_case['summary'],
+        source=test_case['source'],
         model_name='meta-llama/Llama-3.3-70B-Instruct',
         use_api=True
     )
@@ -118,8 +121,8 @@ print()
 print("Without FactChecker (NLI only):")
 print("-" * 80)
 results = compute_all_era3_metrics(
-    test_case['source'],
-    test_case['summary'],
+    summary=test_case['summary'],
+    source=test_case['source'],
     use_factchecker=False
 )
 print(f"Metrics returned: {list(results.keys())}")
@@ -132,8 +135,8 @@ for metric, result in results.items():
 print("\nWith FactChecker (NLI + API):")
 print("-" * 80)
 results = compute_all_era3_metrics(
-    test_case['source'],
-    test_case['summary'],
+    summary=test_case['summary'],
+    source=test_case['source'],
     use_factchecker=True,
     factchecker_model='meta-llama/Llama-3.3-70B-Instruct'
 )

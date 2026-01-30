@@ -22,27 +22,53 @@ _factcc_pipeline = None
 
 
 def compute_nli_score(
-    source: str,
     summary: str,
+    source: str = None,
+    reference_summary: str = None,
     model_name: str = "microsoft/deberta-v3-base"
 ) -> Dict[str, float]:
     """
-    Compute NLI-based consistency score using DeBERTa-v3.
+    Check if summary claims are logically supported by source using Natural Language Inference.
 
-    Uses Natural Language Inference to check if the summary is logically
-    entailed by the source text. This is the modern, production-ready
-    approach to factual consistency checking.
+    This metric answers: "Can the summary's statements be logically inferred from the source?"
+    Uses DeBERTa-v3 NLI model to classify the relationship as entailment/neutral/contradiction.
+    Score > 0.7 = summary is well-supported. Score < 0.4 = potential contradictions or hallucinations.
+
+    Use this when: You want to detect factual inconsistencies, hallucinations, or unsupported claims
+    in summaries. This is the recommended first-line defense against factual errors.
+
+    Note: Truncates texts to ~400 words due to model token limit.
 
     Args:
-        source: The original source text.
-        summary: The generated summary.
-        model_name: The NLI model to use (default: DeBERTa-v3-base).
+        summary (str): Generated summary to check for logical consistency
+        source (str, optional): Original source document that should support the summary
+        reference_summary (str, optional): Not used for NLI (kept for API consistency)
+        model_name (str, optional): HuggingFace NLI model. Default "microsoft/deberta-v3-base" (~600MB)
 
     Returns:
-        Dictionary with 'nli_score' (0-1) and 'label' (classification).
-        Higher score = more consistent/entailed.
+        Dict[str, float]: Result dictionary with keys:
+            - nli_score (float): Entailment probability from 0.0 to 1.0 (higher = more consistent)
+            - label (str): Classification label like "LABEL_0" (entailment) or "LABEL_2" (contradiction)
+            - interpretation (str): Human-readable label like "Highly Consistent" or "Inconsistent"
+            - error (str, optional): Error message if transformers not available
+
+    Example:
+        >>> result = compute_nli_score(
+        ...     summary="Paris is French capital.",
+        ...     source="Paris is capital of France."
+        ... )
+        >>> result['nli_score']  # e.g., 0.92 (high entailment)
+        >>> result['interpretation']  # "Highly Consistent"
     """
     global _nli_pipeline
+
+    # Validate required parameters
+    if source is None:
+        return {
+            'nli_score': None,
+            'label': None,
+            'error': 'Source document is required for NLI evaluation'
+        }
 
     try:
         from transformers import (
@@ -89,12 +115,13 @@ def compute_nli_score(
         return {
             'nli_score': round(entailment_score, 4),
             'label': label,
-            'interpretation': _interpret_nli_score(entailment_score)
+            'interpretation': _interpret_nli_score(entailment_score),
+            'error': None
         }
 
     except Exception as e:
         return {
-            'nli_score': 0.0,
+            'nli_score': None,
             'label': 'ERROR',
             'error': str(e)
         }
@@ -121,26 +148,58 @@ def _interpret_nli_score(score: float) -> str:
 
 
 def compute_factchecker_score(
-    source: str,
     summary: str,
+    source: str = None,
+    reference_summary: str = None,
     model_name: Optional[str] = None,
     use_api: bool = True
 ) -> Dict:
     """
-    Compute fact-checking score using API-based LLM.
+    Perform detailed claim-by-claim fact-checking using a large language model API.
 
-    This is a dedicated fact-checking approach that identifies specific
-    factual errors, hallucinations, and unsupported claims.
+    This metric answers: "Which specific claims in the summary are unsupported or contradicted?"
+    Uses an LLM (default: Llama-3.3-70B) to extract each factual claim from the summary and verify
+    it against the source. Provides detailed breakdown of claims checked, issues found, and explanations.
+
+    Use this when: You want granular, explainable fact-checking with specific claim-level analysis.
+    Requires H2OGPTE API access. Slower but more detailed than local models.
+
+    Note: Requires H2OGPTE_API_KEY and H2OGPTE_ADDRESS environment variables.
 
     Args:
-        source: The original source text.
-        summary: The generated summary.
-        model_name: LLM model to use (default: Llama-3.3-70B).
-        use_api: Whether to use API (if False, returns placeholder).
+        summary (str): Generated summary with claims to fact-check
+        source (str, optional): Original source document to verify claims against
+        reference_summary (str, optional): Not used for fact-checking (kept for API consistency)
+        model_name (str, optional): LLM model name. Default "meta-llama/Llama-3.3-70B-Instruct"
+        use_api (bool, optional): Whether to actually call API. Default True
 
     Returns:
-        Dictionary with 'score' (0-1), 'claims_checked', and 'issues_found'.
+        Dict: Result dictionary with keys:
+            - score (float): Factuality score from 0.0 to 1.0 (normalized from 1-10 scale)
+            - raw_score (float): Original score from 1 to 10
+            - claims_checked (int): Total number of factual claims extracted from summary
+            - issues_found (int): Number of unsupported or contradicted claims
+            - explanation (str): Detailed explanation of findings
+            - full_response (str): Complete LLM response for debugging
+            - interpretation (str): Human-readable label like "Fully Factual" or "Partially Factual"
+            - error (str, optional): Error message if API not configured
+
+    Example:
+        >>> result = compute_factchecker_score(
+        ...     summary="The dog ate.",
+        ...     source="The cat ate."
+        ... )
+        >>> result['claims_checked']  # 1
+        >>> result['issues_found']  # 1 (wrong animal)
+        >>> result['score']  # e.g., 0.3 (30% factual)
     """
+    # Validate required parameters
+    if source is None:
+        return {
+            'score': None,
+            'error': 'Source document is required for fact-checking'
+        }
+
     if not use_api:
         return {
             'score': None,
@@ -246,7 +305,8 @@ Explanation: [Brief summary of any issues found, or "All claims verified" if per
             'issues_found': issues_found,
             'explanation': explanation if explanation else 'No explanation provided',
             'full_response': response,
-            'interpretation': _interpret_factchecker_score(normalized_score) if normalized_score else 'N/A'
+            'interpretation': _interpret_factchecker_score(normalized_score) if normalized_score else 'N/A',
+            'error': None
         }
 
     except Exception as e:
@@ -270,25 +330,52 @@ def _interpret_factchecker_score(score: float) -> str:
         return "Factually Questionable"
 
 
-def compute_factcc_score(source: str, summary: str) -> Dict:
+def compute_factcc_score(
+    summary: str,
+    source: str = None,
+    reference_summary: str = None
+) -> Dict:
     """
-    Compute FactCC score using fine-tuned BERT model.
+    Check factual consistency using a BERT model specifically trained for summarization fact-checking.
 
-    FactCC is a BERT-based model specifically trained for factual consistency
-    checking in summarization. It predicts if a summary is consistent with
-    the source document.
+    This metric answers: "Is this summary factually consistent with the source?"
+    Uses DeBERTa-base-MNLI model (similar to original FactCC) trained specifically for detecting
+    factual errors in summaries. Scores > 0.7 indicate consistency, < 0.4 suggests inconsistencies.
 
-    Note: Uses DeBERTa-base-MNLI as the original FactCC checkpoint has
-    compatibility issues. This provides similar functionality.
+    Use this when: You want a specialized fact-checking model trained specifically for summarization
+    tasks, complementary to general NLI models.
+
+    Note: Uses DeBERTa-base-MNLI as alternative to original FactCC checkpoint. Truncates to ~400 words.
 
     Args:
-        source: The original source text.
-        summary: The generated summary.
+        summary (str): Generated summary to fact-check
+        source (str, optional): Original source document to verify claims against
+        reference_summary (str, optional): Not used for FactCC (kept for API consistency)
 
     Returns:
-        Dictionary with 'score' (0-1) and 'label'.
+        Dict: Result dictionary with keys:
+            - score (float): Consistency score from 0.0 to 1.0 (higher = more consistent)
+            - label (str): "Consistent" or "Inconsistent"
+            - raw_label (str): Original model label before interpretation
+            - interpretation (str): Human-readable label like "Highly Consistent"
+            - error (str, optional): Error message if model not available
+
+    Example:
+        >>> result = compute_factcc_score(
+        ...     summary="The dog ate food.",
+        ...     source="The cat ate food."
+        ... )
+        >>> result['score']  # e.g., 0.35 (low consistency - different animal)
+        >>> result['label']  # "Inconsistent"
     """
     global _factcc_pipeline
+
+    # Validate required parameters
+    if source is None:
+        return {
+            'score': None,
+            'error': 'Source document is required for FactCC evaluation'
+        }
 
     try:
         from transformers import (
@@ -338,7 +425,8 @@ def compute_factcc_score(source: str, summary: str) -> Dict:
             'score': round(consistency_score, 4),
             'label': 'Consistent' if is_consistent else 'Inconsistent',
             'raw_label': label,
-            'interpretation': _interpret_factcc_score(consistency_score)
+            'interpretation': _interpret_factcc_score(consistency_score),
+            'error': None
         }
 
     except Exception as e:
@@ -366,30 +454,52 @@ _alignscore_tokenizer = None
 
 
 def compute_alignscore(
-    source: str,
     summary: str,
+    source: str = None,
+    reference_summary: str = None,
     model_name: str = "liuyanyi/AlignScore-large-hf"
 ) -> Dict:
     """
-    Compute AlignScore for factual consistency evaluation.
+    Evaluate factual consistency using state-of-the-art unified alignment model (RECOMMENDED).
 
-    AlignScore is a unified alignment-based factual consistency metric that
-    achieves state-of-the-art performance across multiple benchmarks. It uses
-    a RoBERTa model fine-tuned on diverse alignment tasks.
+    This metric answers: "How well does the summary align factually with the source across multiple
+    semantic dimensions?" Uses RoBERTa-large fine-tuned on 7 diverse alignment tasks (entailment,
+    paraphrase, fact verification, etc.). Currently the most reliable single metric for factual accuracy.
+
+    Use this when: You want the most robust and comprehensive factual consistency check with a single
+    metric. This is the recommended metric for production fact-checking.
 
     Paper: "AlignScore: Evaluating Factual Consistency with a Unified Alignment Function"
-
-    Uses the HuggingFace model from: https://huggingface.co/liuyanyi/AlignScore-large-hf
+    Model: https://huggingface.co/liuyanyi/AlignScore-large-hf
 
     Args:
-        source: The original source text (context/premise).
-        summary: The generated summary (claim).
-        model_name: HuggingFace model name (default: liuyanyi/AlignScore-large-hf).
+        summary (str): Generated summary (claim) to fact-check
+        source (str, optional): Original source document (context/premise) to verify against
+        reference_summary (str, optional): Not used for AlignScore (kept for API consistency)
+        model_name (str, optional): HuggingFace model. Default "liuyanyi/AlignScore-large-hf" (~1.3GB)
 
     Returns:
-        Dictionary with 'score' (0-1), higher = more factually consistent.
+        Dict: Result dictionary with keys:
+            - score (float): Alignment score from 0.0 to 1.0 (higher = more factually consistent)
+            - interpretation (str): Human-readable label like "Fully Consistent" or "Partially Consistent"
+            - error (str, optional): Error message if model not available
+
+    Example:
+        >>> result = compute_alignscore(
+        ...     summary="Paris is France's capital city.",
+        ...     source="Paris is the capital of France."
+        ... )
+        >>> result['score']  # e.g., 0.95 (very high factual alignment)
+        >>> result['interpretation']  # "Fully Consistent"
     """
     global _alignscore_model, _alignscore_tokenizer
+
+    # Validate required parameters
+    if source is None:
+        return {
+            'score': None,
+            'error': 'Source document is required for AlignScore evaluation'
+        }
 
     try:
         import torch
@@ -420,7 +530,8 @@ def compute_alignscore(
 
         return {
             'score': round(float(score), 4),
-            'interpretation': _interpret_alignscore(float(score))
+            'interpretation': _interpret_alignscore(float(score)),
+            'error': None
         }
 
     except ImportError as e:
@@ -449,21 +560,50 @@ def _interpret_alignscore(score: float) -> str:
         return "Inconsistent"
 
 
-def compute_coverage_score(source: str, summary: str) -> Dict:
+def compute_coverage_score(
+    summary: str,
+    source: str = None,
+    reference_summary: str = None
+) -> Dict:
     """
-    Compute Coverage Score using Named Entity Recognition (NER).
+    Calculate what percentage of named entities from source appear in summary using NER.
 
-    Measures how many named entities (People, Places, Organizations, Dates, etc.)
-    from the source document appear in the summary. High coverage indicates
-    the summary captures the key factual elements.
+    This metric answers: "Did the summary mention the key people, places, organizations, and dates?"
+    Extracts named entities (PERSON, ORG, GPE, DATE, etc.) using spaCy and counts how many from
+    the source are present in the summary. Score of 0.7+ means most key entities captured.
+
+    Use this when: You want to ensure summaries preserve important factual details like names,
+    locations, organizations, and dates. Good for news, reports, and fact-heavy documents.
 
     Args:
-        source: The original source text.
-        summary: The generated summary.
+        summary (str): Generated summary to check for entity coverage
+        source (str, optional): Original source document containing entities to capture
+        reference_summary (str, optional): Not used for Coverage (kept for API consistency)
 
     Returns:
-        Dictionary with coverage metrics.
+        Dict: Result dictionary with keys:
+            - score (float): Entity coverage ratio from 0.0 to 1.0 (e.g., 0.75 = 75% of entities present)
+            - source_entities (int): Total number of unique entities in source
+            - covered_entities (int): Number of source entities found in summary
+            - missing_entities (list): Up to 5 example entities not captured in summary
+            - interpretation (str): Human-readable label like "Good Coverage" or "Low Coverage"
+            - error (str, optional): Error message if spaCy not installed
+
+    Example:
+        >>> result = compute_coverage_score(
+        ...     summary="John visited Paris.",
+        ...     source="John Smith visited Paris in 2023."
+        ... )
+        >>> result['score']  # e.g., 0.67 (2 of 3 entities: John, Paris present; 2023 missing)
+        >>> result['missing_entities']  # ['2023']
     """
+    # Validate required parameters
+    if source is None:
+        return {
+            'score': None,
+            'error': 'Source document is required for Coverage evaluation'
+        }
+
     try:
         import spacy
 
@@ -488,7 +628,8 @@ def compute_coverage_score(source: str, summary: str) -> Dict:
                 'score': 1.0,  # If no entities in source, summary trivially covers all
                 'source_entities': 0,
                 'covered_entities': 0,
-                'interpretation': 'No named entities in source'
+                'interpretation': 'No named entities in source',
+                'error': None
             }
 
         # Extract entities from summary
@@ -506,7 +647,8 @@ def compute_coverage_score(source: str, summary: str) -> Dict:
             'source_entities': len(source_entities),
             'covered_entities': len(covered),
             'missing_entities': list(source_entities - summary_entities)[:5],  # Show up to 5 missing
-            'interpretation': _interpret_coverage_score(coverage_score)
+            'interpretation': _interpret_coverage_score(coverage_score),
+            'error': None
         }
 
     except ImportError:
@@ -536,8 +678,9 @@ def _interpret_coverage_score(score: float) -> str:
 
 
 def compute_all_era3_metrics(
-    source: str,
     summary: str,
+    source: str = None,
+    reference_summary: str = None,
     use_factchecker: bool = False,
     use_factcc: bool = False,
     use_alignscore: bool = False,
@@ -546,47 +689,79 @@ def compute_all_era3_metrics(
     factchecker_model: Optional[str] = None
 ) -> Dict[str, Dict[str, float]]:
     """
-    Compute all Era 3 Group A metrics (Faithfulness checks).
+    Run all available faithfulness and factual consistency metrics to detect hallucinations and errors.
+
+    This function computes multiple metrics that answer: "Is the summary factually accurate and supported
+    by the source?" Uses various approaches: NLI models, specialized fact-checking models, entity coverage,
+    and optional API-based claim verification. NLI is always included; others are opt-in.
+
+    Use this when: You want comprehensive faithfulness checking with multiple complementary approaches
+    to detect different types of factual errors (hallucinations, contradictions, unsupported claims).
 
     Args:
-        source: The original source text.
-        summary: The generated summary.
-        use_factchecker: Whether to use API-based fact-checker.
-        use_factcc: Whether to use FactCC (BERT-based).
-        use_alignscore: Whether to use AlignScore (unified alignment metric).
-        use_coverage: Whether to use Coverage Score (NER overlap).
-        use_unieval: Whether to use UniEval (multi-dimensional evaluator).
-        factchecker_model: LLM model for fact-checking (optional).
+        summary (str): Generated summary to fact-check
+        source (str, optional): Original source document to verify summary against
+        reference_summary (str, optional): Not used for Era3 metrics (kept for API consistency)
+        use_factchecker (bool, optional): Enable API-based LLM fact-checker (slow, requires API). Default False
+        use_factcc (bool, optional): Enable FactCC BERT model (~600MB). Default False
+        use_alignscore (bool, optional): Enable AlignScore unified model (~1.3GB, RECOMMENDED). Default False
+        use_coverage (bool, optional): Enable NER entity coverage check (requires spaCy). Default False
+        use_unieval (bool, optional): Enable UniEval multi-dimensional scorer. Default False
+        factchecker_model (str, optional): LLM model name for API fact-checker. Default None (uses Llama-3.3-70B)
 
     Returns:
-        Dictionary with metric results.
+        Dict[str, Dict]: Dictionary mapping metric names to their results:
+            - 'NLI': Always included - DeBERTa-v3 entailment check
+            - 'FactCC': If use_factcc=True - BERT-based consistency
+            - 'AlignScore': If use_alignscore=True - Unified alignment (RECOMMENDED)
+            - 'Coverage': If use_coverage=True - Named entity coverage
+            - 'UniEval': If use_unieval=True - Multi-dimensional evaluation
+            - 'FactChecker': If use_factchecker=True - API-based claim verification
+            Each value is a dict with score, interpretation, and possibly error keys.
+
+    Example:
+        >>> results = compute_all_era3_metrics(
+        ...     summary="Paris is French capital.",
+        ...     source="Paris is capital of France.",
+        ...     use_alignscore=True,
+        ...     use_coverage=True
+        ... )
+        >>> results['NLI']['nli_score']  # e.g., 0.91
+        >>> results['AlignScore']['score']  # e.g., 0.94
+        >>> list(results.keys())  # ['NLI', 'AlignScore', 'Coverage']
     """
+    # Validate required parameters
+    if source is None:
+        return {
+            'error': 'Source document is required for Era3 metrics'
+        }
+
     results = {
-        'NLI': compute_nli_score(source, summary)
+        'NLI': compute_nli_score(summary=summary, source=source)
     }
 
     # Add FactCC if enabled
     if use_factcc:
-        results['FactCC'] = compute_factcc_score(source, summary)
+        results['FactCC'] = compute_factcc_score(summary=summary, source=source)
 
     # Add AlignScore if enabled
     if use_alignscore:
-        results['AlignScore'] = compute_alignscore(source, summary)
+        results['AlignScore'] = compute_alignscore(summary=summary, source=source)
 
     # Add Coverage Score if enabled (for completeness check)
     if use_coverage:
-        results['Coverage'] = compute_coverage_score(source, summary)
+        results['Coverage'] = compute_coverage_score(summary=summary, source=source)
 
     # Add UniEval if enabled (BLEURT backup - multi-dimensional evaluation)
     if use_unieval:
         from src.evaluators.era3_unieval import compute_unieval
-        results['UniEval'] = compute_unieval(source, summary)
+        results['UniEval'] = compute_unieval(summary=summary, source=source)
 
     # Add API-based fact-checker if enabled
     if use_factchecker:
         results['FactChecker'] = compute_factchecker_score(
-            source,
-            summary,
+            summary=summary,
+            source=source,
             model_name=factchecker_model,
             use_api=True
         )

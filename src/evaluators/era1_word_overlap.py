@@ -16,95 +16,186 @@ _perplexity_model = None
 _perplexity_tokenizer = None
 
 
-def compute_rouge_scores(source: str, summary: str) -> Dict[str, float]:
+def compute_rouge_scores(
+    summary: str,
+    source: str = None,
+    reference_summary: str = None
+) -> Dict[str, float]:
     """
-    Compute ROUGE scores (ROUGE-1, ROUGE-2, ROUGE-L).
+    Calculate word and phrase overlap between summary and reference text using ROUGE metrics.
 
-    ROUGE (Recall-Oriented Understudy for Gisting Evaluation) measures
-    overlap of n-grams between the summary and source.
+    This metric answers: "How many words/phrases match between the summary and reference?"
+    ROUGE-1 counts single word matches, ROUGE-2 counts two-word phrase matches, ROUGE-L finds
+    the longest common sequence. Scores range 0.0 to 1.0 (higher = more overlap).
+
+    Use this when: You want to compare a generated summary against a reference summary to check
+    if it uses similar wording and captures the same information.
 
     Args:
-        source: The original source text.
-        summary: The generated summary.
+        summary (str): Generated summary text to evaluate
+        source (str, optional): Source document text to compare against
+        reference_summary (str, optional): Reference summary that represents ideal quality
 
     Returns:
-        Dictionary with keys: 'rouge1', 'rouge2', 'rougeL' (F1 scores).
+        Dict[str, float]: Dictionary with ROUGE scores:
+            - rouge1 (float): Single word overlap F1 score (0.0 to 1.0)
+            - rouge2 (float): Two-word phrase overlap F1 score (0.0 to 1.0)
+            - rougeL (float): Longest common subsequence F1 score (0.0 to 1.0)
+            - error (str, optional): Error message if computation failed
+
+    Example:
+        >>> result = compute_rouge_scores(
+        ...     summary="A cat sat on a mat.",
+        ...     source="The cat sat on the mat."
+        ... )
+        >>> result['rouge1']  # e.g., 0.85 (high single-word overlap)
+        >>> result['rouge2']  # e.g., 0.67 (good phrase overlap)
     """
     try:
         from rouge_score import rouge_scorer
+
+        # Validate required parameters
+        if source is None and reference_summary is None:
+            return {
+                'rouge1': None,
+                'rouge2': None,
+                'rougeL': None,
+                'error': 'Either source or reference_summary must be provided'
+            }
+
+        # Use source if provided, otherwise use reference_summary
+        comparison_text = source if source is not None else reference_summary
 
         scorer = rouge_scorer.RougeScorer(
             ['rouge1', 'rouge2', 'rougeL'],
             use_stemmer=True
         )
 
-        scores = scorer.score(source, summary)
+        scores = scorer.score(comparison_text, summary)
 
         return {
             'rouge1': round(scores['rouge1'].fmeasure, 4),
             'rouge2': round(scores['rouge2'].fmeasure, 4),
-            'rougeL': round(scores['rougeL'].fmeasure, 4)
+            'rougeL': round(scores['rougeL'].fmeasure, 4),
+            'error': None
         }
 
     except Exception as e:
         return {
-            'rouge1': 0.0,
-            'rouge2': 0.0,
-            'rougeL': 0.0,
+            'rouge1': None,
+            'rouge2': None,
+            'rougeL': None,
             'error': str(e)
         }
 
 
-def compute_bleu_score(source: str, summary: str) -> Dict[str, float]:
+def compute_bleu_score(
+    summary: str,
+    source: str = None,
+    reference_summary: str = None
+) -> Dict[str, float]:
     """
-    Compute BLEU score.
+    Calculate n-gram precision between summary and reference using BLEU score.
 
-    BLEU (Bilingual Evaluation Understudy) measures precision of n-grams,
-    originally designed for machine translation evaluation.
+    This metric answers: "What percentage of words/phrases in the summary appear in the reference?"
+    Originally designed for machine translation. Measures precision (not recall), so shorter
+    summaries that match well score higher. Typical scores for summaries: 0.2-0.4 is good.
+
+    Use this when: You want to check if the generated text uses the same vocabulary as the reference,
+    especially for tasks where exact wording matters.
 
     Args:
-        source: The original source text (treated as reference).
-        summary: The generated summary (treated as hypothesis).
+        summary (str): Generated summary text to evaluate
+        source (str, optional): Source document text to compare against
+        reference_summary (str, optional): Reference summary that represents ideal quality
 
     Returns:
-        Dictionary with key 'bleu' containing the score.
+        Dict[str, float]: Dictionary with BLEU score:
+            - bleu (float): Precision score from 0.0 to 1.0 (0.3+ is good for summaries)
+            - error (str, optional): Error message if computation failed
+
+    Example:
+        >>> result = compute_bleu_score(
+        ...     summary="The cat sat down.",
+        ...     source="The cat sat."
+        ... )
+        >>> result['bleu']  # e.g., 0.65 (good precision match)
     """
     try:
         from sacrebleu import sentence_bleu
 
+        # Validate required parameters
+        if source is None and reference_summary is None:
+            return {
+                'bleu': None,
+                'error': 'Either source or reference_summary must be provided'
+            }
+
+        # Use source if provided, otherwise use reference_summary
+        comparison_text = source if source is not None else reference_summary
+
         # BLEU expects references as a list
-        score = sentence_bleu(summary, [source])
+        score = sentence_bleu(summary, [comparison_text])
 
         return {
-            'bleu': round(score.score / 100, 4)  # Normalize to 0-1
+            'bleu': round(score.score / 100, 4),  # Normalize to 0-1
+            'error': None
         }
 
     except Exception as e:
         return {
-            'bleu': 0.0,
+            'bleu': None,
             'error': str(e)
         }
 
 
-def compute_meteor_score(source: str, summary: str) -> Dict[str, float]:
+def compute_meteor_score(
+    summary: str,
+    source: str = None,
+    reference_summary: str = None
+) -> Dict[str, float]:
     """
-    Compute METEOR score.
+    Calculate semantic word overlap considering synonyms and word stems using METEOR.
 
-    METEOR (Metric for Evaluation of Translation with Explicit ORdering)
-    extends BLEU by considering synonyms, stemming, and word order.
+    This metric answers: "Do the texts match even with different but equivalent wording?"
+    More flexible than BLEU/ROUGE: "car" matches "automobile", "running" matches "runs".
+    Considers word order and alignment. Scores typically higher than BLEU.
+
+    Use this when: You want forgiving word matching that recognizes synonyms and word forms,
+    good for evaluating paraphrasing quality.
 
     Args:
-        source: The original source text.
-        summary: The generated summary.
+        summary (str): Generated summary text to evaluate
+        source (str, optional): Source document text to compare against
+        reference_summary (str, optional): Reference summary that represents ideal quality
 
     Returns:
-        Dictionary with key 'meteor' containing the score.
+        Dict[str, float]: Dictionary with METEOR score:
+            - meteor (float): Alignment score from 0.0 to 1.0 (higher = better semantic match)
+            - error (str, optional): Error message if NLTK data not available
+
+    Example:
+        >>> result = compute_meteor_score(
+        ...     summary="A feline rushed rapidly.",
+        ...     source="The cat ran quickly."
+        ... )
+        >>> result['meteor']  # e.g., 0.45 (recognizes synonym pairs)
     """
     try:
         from nltk.translate.meteor_score import meteor_score
         from nltk.tokenize import word_tokenize
         import nltk
         import ssl
+
+        # Validate required parameters
+        if source is None and reference_summary is None:
+            return {
+                'meteor': None,
+                'error': 'Either source or reference_summary must be provided'
+            }
+
+        # Use source if provided, otherwise use reference_summary
+        comparison_text = source if source is not None else reference_summary
 
         # Handle SSL certificate issues
         try:
@@ -132,14 +223,15 @@ def compute_meteor_score(source: str, summary: str) -> Dict[str, float]:
                     pass  # Continue even if download fails
 
         # Tokenize texts
-        source_tokens = word_tokenize(source.lower())
+        source_tokens = word_tokenize(comparison_text.lower())
         summary_tokens = word_tokenize(summary.lower())
 
         # Compute METEOR
         score = meteor_score([source_tokens], summary_tokens)
 
         return {
-            'meteor': round(score, 4)
+            'meteor': round(score, 4),
+            'error': None
         }
 
     except Exception as e:
@@ -147,64 +239,108 @@ def compute_meteor_score(source: str, summary: str) -> Dict[str, float]:
         if 'punkt_tab' in error_msg:
             error_msg = "NLTK punkt_tab missing. Run: python3 -c \"import nltk; nltk.download('punkt_tab')\""
         return {
-            'meteor': 0.0,
+            'meteor': None,
             'error': error_msg
         }
 
 
-def compute_levenshtein_score(source: str, summary: str) -> Dict[str, float]:
+def compute_levenshtein_score(
+    summary: str,
+    source: str = None,
+    reference_summary: str = None
+) -> Dict[str, float]:
     """
-    Compute normalized Levenshtein distance.
+    Calculate character-level edit distance similarity between two texts.
 
-    Levenshtein distance measures the minimum number of single-character
-    edits needed to transform one string into another. This is normalized
-    to a 0-1 similarity score.
+    This metric answers: "How many character insertions/deletions/substitutions to make texts match?"
+    Measures string similarity at character level. 1.0 = identical, 0.0 = completely different.
+    Sensitive to typos, spacing, and punctuation differences.
+
+    Use this when: You want to measure exact string similarity including formatting, or detect
+    near-duplicate texts with minor differences.
 
     Args:
-        source: The original source text.
-        summary: The generated summary.
+        summary (str): Generated summary text to evaluate
+        source (str, optional): Source document text to compare against
+        reference_summary (str, optional): Reference summary that represents ideal quality
 
     Returns:
-        Dictionary with key 'levenshtein' containing normalized similarity.
+        Dict[str, float]: Dictionary with Levenshtein similarity:
+            - levenshtein (float): Normalized similarity from 0.0 to 1.0 (1.0 = identical strings)
+            - error (str, optional): Error message if python-Levenshtein not installed
+
+    Example:
+        >>> result = compute_levenshtein_score(
+        ...     summary="hello word",
+        ...     source="hello world"
+        ... )
+        >>> result['levenshtein']  # e.g., 0.91 (1 character different out of 11)
     """
     try:
         import Levenshtein
 
+        # Validate required parameters
+        if source is None and reference_summary is None:
+            return {
+                'levenshtein': None,
+                'error': 'Either source or reference_summary must be provided'
+            }
+
+        # Use source if provided, otherwise use reference_summary
+        comparison_text = source if source is not None else reference_summary
+
         # Compute distance
-        distance = Levenshtein.distance(source, summary)
+        distance = Levenshtein.distance(comparison_text, summary)
 
         # Normalize to similarity score (0-1)
-        max_length = max(len(source), len(summary))
+        max_length = max(len(comparison_text), len(summary))
         if max_length == 0:
             similarity = 1.0
         else:
             similarity = 1 - (distance / max_length)
 
         return {
-            'levenshtein': round(similarity, 4)
+            'levenshtein': round(similarity, 4),
+            'error': None
         }
 
     except Exception as e:
         return {
-            'levenshtein': 0.0,
+            'levenshtein': None,
             'error': str(e)
         }
 
 
-def compute_perplexity(source: str, summary: str) -> Dict[str, float]:
+def compute_perplexity(
+    summary: str,
+    source: str = None,
+    reference_summary: str = None
+) -> Dict[str, float]:
     """
-    Compute Perplexity score for the summary.
+    Measure text fluency and naturalness using GPT-2 language model perplexity.
 
-    Perplexity measures how "surprised" a language model is by the text.
-    Lower perplexity indicates more fluent, natural text.
-    Note: This measures fluency, not factual accuracy.
+    This metric answers: "Does the summary sound natural and grammatically correct?"
+    Lower perplexity (< 50) = fluent natural text. Higher (> 200) = awkward/unnatural.
+    Note: This only checks fluency, NOT factual accuracy or meaning.
+
+    Use this when: You want to check if text is grammatical and naturally written,
+    independent of whether it matches the source content.
 
     Args:
-        source: The original source text (for context).
-        summary: The generated summary to evaluate.
+        summary (str): Generated summary text to evaluate for fluency
+        source (str, optional): Unused, kept for API consistency
+        reference_summary (str, optional): Unused, kept for API consistency
 
     Returns:
-        Dictionary with key 'perplexity' containing the score.
+        Dict[str, float]: Dictionary with perplexity scores:
+            - perplexity (float): Raw perplexity value (lower is better, typically 10-200)
+            - normalized_score (float): Normalized fluency score 0.0 to 1.0 (higher = more fluent)
+            - error (str, optional): Error message if transformers or GPT-2 not available
+
+    Example:
+        >>> result = compute_perplexity(summary="The cat sat on the mat.")
+        >>> result['perplexity']  # e.g., 28.5 (fluent text)
+        >>> result['normalized_score']  # e.g., 0.72 (normalized fluency)
     """
     global _perplexity_model, _perplexity_tokenizer
 
@@ -238,72 +374,153 @@ def compute_perplexity(source: str, summary: str) -> Dict[str, float]:
 
         return {
             'perplexity': round(perplexity, 4),
-            'normalized_score': round(normalized, 4)
+            'normalized_score': round(normalized, 4),
+            'error': None
         }
 
     except Exception as e:
         return {
-            'perplexity': 0.0,
-            'normalized_score': 0.0,
+            'perplexity': None,
+            'normalized_score': None,
             'error': str(e)
         }
 
 
-def compute_chrf_score(reference: str, summary: str) -> Dict[str, float]:
+def compute_chrf_score(
+    summary: str,
+    source: str = None,
+    reference_summary: str = None
+) -> Dict[str, float]:
     """
-    Compute chrF++ score (character n-gram F-score).
+    Calculate character n-gram overlap with word order consideration using chrF++.
 
-    chrF++ uses character-level matching, making it more robust to:
-    - Morphological variations (word endings)
-    - Typos and minor spelling differences
-    - Languages with rich morphology
+    This metric answers: "Do texts match at character level including partial word matches?"
+    More forgiving than word-level metrics: handles typos, morphology ("running"/"runs"),
+    and compound words better. Useful for morphologically rich languages.
+
+    Use this when: You want robust matching that tolerates spelling variations, word endings,
+    and morphological differences while still considering word order.
 
     Args:
-        reference: The reference text.
-        summary: The generated summary.
+        summary (str): Generated summary text to evaluate
+        source (str, optional): Source document text to compare against
+        reference_summary (str, optional): Reference summary that represents ideal quality
 
     Returns:
-        Dictionary with chrF++ score.
+        Dict[str, float]: Dictionary with chrF++ scores:
+            - chrf (float): Normalized character F-score from 0.0 to 1.0 (higher = better match)
+            - raw_score (float): Raw score from 0 to 100 (not normalized)
+            - error (str, optional): Error message if sacrebleu not installed
+
+    Example:
+        >>> result = compute_chrf_score(
+        ...     summary="The runners run quickly.",
+        ...     source="The runner quickly ran."
+        ... )
+        >>> result['chrf']  # e.g., 0.78 (high character-level similarity despite word differences)
     """
     try:
         from sacrebleu.metrics import CHRF
 
+        # Validate required parameters
+        if source is None and reference_summary is None:
+            return {
+                'chrf': None,
+                'error': 'Either source or reference_summary must be provided'
+            }
+
+        # Use source if provided, otherwise use reference_summary
+        comparison_text = source if source is not None else reference_summary
+
         chrf = CHRF(word_order=2)  # chrF++ includes word bigrams
-        score = chrf.sentence_score(summary, [reference])
+        score = chrf.sentence_score(summary, [comparison_text])
 
         return {
             'chrf': round(score.score / 100, 4),  # Normalize to 0-1
-            'raw_score': round(score.score, 2)
+            'raw_score': round(score.score, 2),
+            'error': None
         }
 
     except ImportError:
         return {
-            'chrf': 0.0,
+            'chrf': None,
             'error': 'sacrebleu not installed. Run: pip install sacrebleu'
         }
     except Exception as e:
         return {
-            'chrf': 0.0,
+            'chrf': None,
             'error': str(e)
         }
 
 
-def compute_all_era1_metrics(source: str, summary: str) -> Dict[str, Dict[str, float]]:
+def compute_all_era1_metrics(
+    summary: str,
+    source: str = None,
+    reference_summary: str = None
+) -> Dict[str, Dict[str, float]]:
     """
-    Compute all Era 1 metrics at once (Lexical Conformance).
+    Run all word-overlap and lexical similarity metrics to compare summary against reference.
+
+    This function computes 6 lexical metrics that answer: "How well does the summary match
+    the reference's exact words, phrases, and character sequences?" Useful for checking if
+    a generated summary uses similar vocabulary and structure as a human-written reference.
+
+    Use this when: You have a reference summary and want comprehensive lexical comparison
+    using multiple complementary approaches (word n-grams, characters, synonyms, fluency).
 
     Args:
-        source: The reference text (for reference-based comparison).
-        summary: The generated summary.
+        summary (str): Generated summary text to evaluate
+        source (str, optional): Source document text to compare against
+        reference_summary (str, optional): Reference summary that represents ideal quality
 
     Returns:
-        Dictionary with keys for each metric, containing their scores.
+        Dict[str, Dict[str, float]]: Dictionary mapping metric names to their results:
+            - 'ROUGE': N-gram overlap scores (rouge1, rouge2, rougeL)
+            - 'BLEU': Precision-based n-gram score
+            - 'METEOR': Synonym and stem-aware alignment score
+            - 'chrF++': Character-level n-gram F-score
+            - 'Levenshtein': Character edit distance similarity
+            - 'Perplexity': Fluency score using GPT-2
+            Each value is a dict with score keys and possibly 'error'.
+
+    Example:
+        >>> results = compute_all_era1_metrics(
+        ...     summary="Generated summary...",
+        ...     source="Reference summary..."
+        ... )
+        >>> results['ROUGE']['rouge1']  # e.g., 0.65
+        >>> results['BLEU']['bleu']  # e.g., 0.28
+        >>> list(results.keys())  # ['ROUGE', 'BLEU', 'METEOR', 'chrF++', 'Levenshtein', 'Perplexity']
     """
     return {
-        'ROUGE': compute_rouge_scores(source, summary),
-        'BLEU': compute_bleu_score(source, summary),
-        'METEOR': compute_meteor_score(source, summary),
-        'chrF++': compute_chrf_score(source, summary),
-        'Levenshtein': compute_levenshtein_score(source, summary),
-        'Perplexity': compute_perplexity(source, summary)
+        'ROUGE': compute_rouge_scores(
+            summary=summary,
+            source=source,
+            reference_summary=reference_summary
+        ),
+        'BLEU': compute_bleu_score(
+            summary=summary,
+            source=source,
+            reference_summary=reference_summary
+        ),
+        'METEOR': compute_meteor_score(
+            summary=summary,
+            source=source,
+            reference_summary=reference_summary
+        ),
+        'chrF++': compute_chrf_score(
+            summary=summary,
+            source=source,
+            reference_summary=reference_summary
+        ),
+        'Levenshtein': compute_levenshtein_score(
+            summary=summary,
+            source=source,
+            reference_summary=reference_summary
+        ),
+        'Perplexity': compute_perplexity(
+            summary=summary,
+            source=source,
+            reference_summary=reference_summary
+        )
     }

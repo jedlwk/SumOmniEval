@@ -23,27 +23,58 @@ _unieval_evaluator = None
 
 
 def compute_unieval(
-    source: str,
     summary: str,
+    source: str = None,
+    reference_summary: str = None,
     dimensions: Optional[List[str]] = None
 ) -> Dict:
     """
-    Compute UniEval scores for summarization evaluation.
+    Evaluate summary quality across multiple dimensions using UniEval's Boolean QA framework.
 
-    UniEval evaluates multiple dimensions:
-    - coherence: Is the text logically connected?
-    - consistency: Does the summary align with the source? (factuality)
-    - fluency: Is the text natural and well-written?
+    This metric answers: "Is the summary coherent, factually consistent, and fluent?" UniEval
+    converts evaluation into Boolean question-answering: asking yes/no questions for each dimension
+    and converting to scores. Uses the MingZhong/unieval-sum model (~1.5GB) trained on human judgments.
+    Scores range 0.0 to 1.0 for each dimension.
+
+    Use this when: You want multi-dimensional quality assessment (coherence, consistency, fluency)
+    from a unified model. Good alternative to BLEURT which has TensorFlow conflicts. Requires model download.
 
     Args:
-        source: The original source text.
-        summary: The generated summary to evaluate.
-        dimensions: List of dimensions to evaluate. Default: all three.
+        summary (str): Generated summary text to evaluate
+        source (str, optional): Original source document text to check consistency against
+        reference_summary (str, optional): Not used for UniEval (kept for API consistency)
+        dimensions (Optional[List[str]], optional): List of dimensions to evaluate.
+            Options: ["coherence", "consistency", "fluency"]. Default None evaluates all three.
 
     Returns:
-        Dictionary with scores for each dimension and interpretations.
+        Dict: Result dictionary with keys:
+            - coherence (float): Logical flow score from 0.0 to 1.0 (higher = better structure)
+            - consistency (float): Factual alignment score from 0.0 to 1.0 (higher = more faithful)
+            - fluency (float): Writing quality score from 0.0 to 1.0 (higher = more natural)
+            - interpretations (Dict): Human-readable labels for each dimension:
+                - "Excellent" (≥0.85), "Good" (≥0.70), "Fair" (≥0.50), "Poor" (≥0.30), "Very Poor" (<0.30)
+            - error (str, optional): Error message if UniEval package not installed
+            - note (str, optional): Indicates if fallback implementation was used
+
+    Example:
+        >>> result = compute_unieval(
+        ...     summary="Paris is French capital.",
+        ...     source="Paris is capital."
+        ... )
+        >>> result['consistency']  # e.g., 0.92 (high factual consistency)
+        >>> result['interpretations']['consistency']  # "Excellent"
+        >>> result['coherence']  # e.g., 0.88
     """
     global _unieval_evaluator
+
+    # Validate required parameters
+    if source is None:
+        return {
+            'coherence': None,
+            'consistency': None,
+            'fluency': None,
+            'error': 'Source document is required for UniEval evaluation'
+        }
 
     if dimensions is None:
         dimensions = ["coherence", "consistency", "fluency"]
@@ -82,12 +113,13 @@ def compute_unieval(
                 'coherence': _interpret_unieval_score(result.get('coherence')),
                 'consistency': _interpret_unieval_score(result.get('consistency')),
                 'fluency': _interpret_unieval_score(result.get('fluency'))
-            }
+            },
+            'error': None
         }
 
     except ImportError:
         # UniEval not installed - try alternative approach using transformers directly
-        return _compute_unieval_fallback(source, summary, dimensions)
+        return _compute_unieval_fallback(summary, source, dimensions)
 
     except Exception as e:
         return {
@@ -99,14 +131,28 @@ def compute_unieval(
 
 
 def _compute_unieval_fallback(
-    source: str,
     summary: str,
+    source: str,
     dimensions: List[str]
 ) -> Dict:
     """
-    Fallback implementation using transformers directly.
+    Fallback implementation using HuggingFace transformers when UniEval library is not installed.
 
-    Uses the UniEval model from HuggingFace with direct inference.
+    This function provides an alternative way to use the UniEval model by directly loading it from
+    HuggingFace and performing inference. Converts evaluation questions into Boolean QA format
+    (e.g., "Is this summary coherent?") and interprets yes/no responses as scores (1.0 or 0.0).
+
+    Use this when: UniEval library is not installed but transformers package is available.
+    Internal fallback function called automatically by compute_unieval().
+
+    Args:
+        summary (str): Generated summary to evaluate
+        source (str): Original source document text
+        dimensions (List[str]): List of dimensions to evaluate (coherence, consistency, fluency)
+
+    Returns:
+        Dict: Same format as compute_unieval() with coherence, consistency, fluency scores,
+              interpretations, and a 'note' field indicating fallback was used
     """
     try:
         import torch
@@ -171,7 +217,8 @@ def _compute_unieval_fallback(
                 'consistency': _interpret_unieval_score(results.get('consistency')),
                 'fluency': _interpret_unieval_score(results.get('fluency'))
             },
-            'note': 'Using fallback implementation (UniEval library not installed)'
+            'note': 'Using fallback implementation (UniEval library not installed)',
+            'error': None
         }
 
     except ImportError as e:
@@ -206,17 +253,52 @@ def _interpret_unieval_score(score: Optional[float]) -> str:
         return "Very Poor"
 
 
-def compute_all_unieval_metrics(source: str, summary: str) -> Dict[str, Dict]:
+def compute_all_unieval_metrics(
+    summary: str,
+    source: str = None,
+    reference_summary: str = None
+) -> Dict[str, Dict]:
     """
-    Compute all UniEval metrics.
+    Run all UniEval dimensions (coherence, consistency, fluency) in a single evaluation call.
+
+    This function provides a convenient wrapper to evaluate all three UniEval dimensions at once,
+    returning results in a structured format consistent with other evaluator modules. Evaluates
+    logical flow, factual consistency, and writing quality using the unified UniEval framework.
+
+    Use this when: You want to compute all UniEval metrics in one call with consistent output format.
+    Wrapper function that calls compute_unieval() with all dimensions enabled.
 
     Args:
-        source: The original source text.
-        summary: The generated summary.
+        summary (str): Generated summary text to evaluate
+        source (str, optional): Original source document text to check consistency against
+        reference_summary (str, optional): Not used for UniEval (kept for API consistency)
 
     Returns:
-        Dictionary with UniEval results.
+        Dict[str, Dict]: Dictionary with single key 'UniEval' mapping to results:
+            - 'UniEval': Dictionary with coherence, consistency, fluency scores and interpretations
+              (same format as compute_unieval() return value)
+
+    Example:
+        >>> results = compute_all_unieval_metrics(
+        ...     summary="Summary text...",
+        ...     source="Source text..."
+        ... )
+        >>> results['UniEval']['coherence']  # e.g., 0.85
+        >>> results['UniEval']['consistency']  # e.g., 0.90
+        >>> results['UniEval']['fluency']  # e.g., 0.88
+        >>> list(results.keys())  # ['UniEval']
     """
+    # Validate required parameters
+    if source is None:
+        return {
+            'UniEval': {
+                'coherence': None,
+                'consistency': None,
+                'fluency': None,
+                'error': 'Source document is required for UniEval evaluation'
+            }
+        }
+
     return {
-        'UniEval': compute_unieval(source, summary)
+        'UniEval': compute_unieval(summary=summary, source=source)
     }
