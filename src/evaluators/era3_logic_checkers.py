@@ -22,8 +22,9 @@ _factcc_pipeline = None
 
 
 def compute_nli_score(
-    source: str,
     summary: str,
+    source: str = None,
+    reference_summary: str = None,
     model_name: str = "microsoft/deberta-v3-base"
 ) -> Dict[str, float]:
     """
@@ -39,8 +40,9 @@ def compute_nli_score(
     Note: Truncates texts to ~400 words due to model token limit.
 
     Args:
-        source (str): Original source document that should support the summary
         summary (str): Generated summary to check for logical consistency
+        source (str, optional): Original source document that should support the summary
+        reference_summary (str, optional): Not used for NLI (kept for API consistency)
         model_name (str, optional): HuggingFace NLI model. Default "microsoft/deberta-v3-base" (~600MB)
 
     Returns:
@@ -51,11 +53,22 @@ def compute_nli_score(
             - error (str, optional): Error message if transformers not available
 
     Example:
-        >>> result = compute_nli_score("Paris is capital of France.", "Paris is French capital.")
+        >>> result = compute_nli_score(
+        ...     summary="Paris is French capital.",
+        ...     source="Paris is capital of France."
+        ... )
         >>> result['nli_score']  # e.g., 0.92 (high entailment)
         >>> result['interpretation']  # "Highly Consistent"
     """
     global _nli_pipeline
+
+    # Validate required parameters
+    if source is None:
+        return {
+            'nli_score': None,
+            'label': None,
+            'error': 'Source document is required for NLI evaluation'
+        }
 
     try:
         from transformers import (
@@ -134,8 +147,9 @@ def _interpret_nli_score(score: float) -> str:
 
 
 def compute_factchecker_score(
-    source: str,
     summary: str,
+    source: str = None,
+    reference_summary: str = None,
     model_name: Optional[str] = None,
     use_api: bool = True
 ) -> Dict:
@@ -152,8 +166,9 @@ def compute_factchecker_score(
     Note: Requires H2OGPTE_API_KEY and H2OGPTE_ADDRESS environment variables.
 
     Args:
-        source (str): Original source document to verify claims against
         summary (str): Generated summary with claims to fact-check
+        source (str, optional): Original source document to verify claims against
+        reference_summary (str, optional): Not used for fact-checking (kept for API consistency)
         model_name (str, optional): LLM model name. Default "meta-llama/Llama-3.3-70B-Instruct"
         use_api (bool, optional): Whether to actually call API. Default True
 
@@ -169,11 +184,21 @@ def compute_factchecker_score(
             - error (str, optional): Error message if API not configured
 
     Example:
-        >>> result = compute_factchecker_score("The cat ate.", "The dog ate.")
+        >>> result = compute_factchecker_score(
+        ...     summary="The dog ate.",
+        ...     source="The cat ate."
+        ... )
         >>> result['claims_checked']  # 1
         >>> result['issues_found']  # 1 (wrong animal)
         >>> result['score']  # e.g., 0.3 (30% factual)
     """
+    # Validate required parameters
+    if source is None:
+        return {
+            'score': None,
+            'error': 'Source document is required for fact-checking'
+        }
+
     if not use_api:
         return {
             'score': None,
@@ -303,7 +328,11 @@ def _interpret_factchecker_score(score: float) -> str:
         return "Factually Questionable"
 
 
-def compute_factcc_score(source: str, summary: str) -> Dict:
+def compute_factcc_score(
+    summary: str,
+    source: str = None,
+    reference_summary: str = None
+) -> Dict:
     """
     Check factual consistency using a BERT model specifically trained for summarization fact-checking.
 
@@ -317,8 +346,9 @@ def compute_factcc_score(source: str, summary: str) -> Dict:
     Note: Uses DeBERTa-base-MNLI as alternative to original FactCC checkpoint. Truncates to ~400 words.
 
     Args:
-        source (str): Original source document to verify claims against
         summary (str): Generated summary to fact-check
+        source (str, optional): Original source document to verify claims against
+        reference_summary (str, optional): Not used for FactCC (kept for API consistency)
 
     Returns:
         Dict: Result dictionary with keys:
@@ -329,11 +359,21 @@ def compute_factcc_score(source: str, summary: str) -> Dict:
             - error (str, optional): Error message if model not available
 
     Example:
-        >>> result = compute_factcc_score("The cat ate food.", "The dog ate food.")
+        >>> result = compute_factcc_score(
+        ...     summary="The dog ate food.",
+        ...     source="The cat ate food."
+        ... )
         >>> result['score']  # e.g., 0.35 (low consistency - different animal)
         >>> result['label']  # "Inconsistent"
     """
     global _factcc_pipeline
+
+    # Validate required parameters
+    if source is None:
+        return {
+            'score': None,
+            'error': 'Source document is required for FactCC evaluation'
+        }
 
     try:
         from transformers import (
@@ -411,8 +451,9 @@ _alignscore_tokenizer = None
 
 
 def compute_alignscore(
-    source: str,
     summary: str,
+    source: str = None,
+    reference_summary: str = None,
     model_name: str = "liuyanyi/AlignScore-large-hf"
 ) -> Dict:
     """
@@ -429,8 +470,9 @@ def compute_alignscore(
     Model: https://huggingface.co/liuyanyi/AlignScore-large-hf
 
     Args:
-        source (str): Original source document (context/premise) to verify against
         summary (str): Generated summary (claim) to fact-check
+        source (str, optional): Original source document (context/premise) to verify against
+        reference_summary (str, optional): Not used for AlignScore (kept for API consistency)
         model_name (str, optional): HuggingFace model. Default "liuyanyi/AlignScore-large-hf" (~1.3GB)
 
     Returns:
@@ -440,11 +482,21 @@ def compute_alignscore(
             - error (str, optional): Error message if model not available
 
     Example:
-        >>> result = compute_alignscore("Paris is the capital of France.", "Paris is France's capital city.")
+        >>> result = compute_alignscore(
+        ...     summary="Paris is France's capital city.",
+        ...     source="Paris is the capital of France."
+        ... )
         >>> result['score']  # e.g., 0.95 (very high factual alignment)
         >>> result['interpretation']  # "Fully Consistent"
     """
     global _alignscore_model, _alignscore_tokenizer
+
+    # Validate required parameters
+    if source is None:
+        return {
+            'score': None,
+            'error': 'Source document is required for AlignScore evaluation'
+        }
 
     try:
         import torch
@@ -504,7 +556,11 @@ def _interpret_alignscore(score: float) -> str:
         return "Inconsistent"
 
 
-def compute_coverage_score(source: str, summary: str) -> Dict:
+def compute_coverage_score(
+    summary: str,
+    source: str = None,
+    reference_summary: str = None
+) -> Dict:
     """
     Calculate what percentage of named entities from source appear in summary using NER.
 
@@ -516,8 +572,9 @@ def compute_coverage_score(source: str, summary: str) -> Dict:
     locations, organizations, and dates. Good for news, reports, and fact-heavy documents.
 
     Args:
-        source (str): Original source document containing entities to capture
         summary (str): Generated summary to check for entity coverage
+        source (str, optional): Original source document containing entities to capture
+        reference_summary (str, optional): Not used for Coverage (kept for API consistency)
 
     Returns:
         Dict: Result dictionary with keys:
@@ -529,10 +586,20 @@ def compute_coverage_score(source: str, summary: str) -> Dict:
             - error (str, optional): Error message if spaCy not installed
 
     Example:
-        >>> result = compute_coverage_score("John Smith visited Paris in 2023.", "John visited Paris.")
+        >>> result = compute_coverage_score(
+        ...     summary="John visited Paris.",
+        ...     source="John Smith visited Paris in 2023."
+        ... )
         >>> result['score']  # e.g., 0.67 (2 of 3 entities: John, Paris present; 2023 missing)
         >>> result['missing_entities']  # ['2023']
     """
+    # Validate required parameters
+    if source is None:
+        return {
+            'score': None,
+            'error': 'Source document is required for Coverage evaluation'
+        }
+
     try:
         import spacy
 
@@ -605,8 +672,9 @@ def _interpret_coverage_score(score: float) -> str:
 
 
 def compute_all_era3_metrics(
-    source: str,
     summary: str,
+    source: str = None,
+    reference_summary: str = None,
     use_factchecker: bool = False,
     use_factcc: bool = False,
     use_alignscore: bool = False,
@@ -625,8 +693,9 @@ def compute_all_era3_metrics(
     to detect different types of factual errors (hallucinations, contradictions, unsupported claims).
 
     Args:
-        source (str): Original source document to verify summary against
         summary (str): Generated summary to fact-check
+        source (str, optional): Original source document to verify summary against
+        reference_summary (str, optional): Not used for Era3 metrics (kept for API consistency)
         use_factchecker (bool, optional): Enable API-based LLM fact-checker (slow, requires API). Default False
         use_factcc (bool, optional): Enable FactCC BERT model (~600MB). Default False
         use_alignscore (bool, optional): Enable AlignScore unified model (~1.3GB, RECOMMENDED). Default False
@@ -646,8 +715,8 @@ def compute_all_era3_metrics(
 
     Example:
         >>> results = compute_all_era3_metrics(
-        ...     "Paris is capital of France.",
-        ...     "Paris is French capital.",
+        ...     summary="Paris is French capital.",
+        ...     source="Paris is capital of France.",
         ...     use_alignscore=True,
         ...     use_coverage=True
         ... )
@@ -655,32 +724,38 @@ def compute_all_era3_metrics(
         >>> results['AlignScore']['score']  # e.g., 0.94
         >>> list(results.keys())  # ['NLI', 'AlignScore', 'Coverage']
     """
+    # Validate required parameters
+    if source is None:
+        return {
+            'error': 'Source document is required for Era3 metrics'
+        }
+
     results = {
-        'NLI': compute_nli_score(source, summary)
+        'NLI': compute_nli_score(summary=summary, source=source)
     }
 
     # Add FactCC if enabled
     if use_factcc:
-        results['FactCC'] = compute_factcc_score(source, summary)
+        results['FactCC'] = compute_factcc_score(summary=summary, source=source)
 
     # Add AlignScore if enabled
     if use_alignscore:
-        results['AlignScore'] = compute_alignscore(source, summary)
+        results['AlignScore'] = compute_alignscore(summary=summary, source=source)
 
     # Add Coverage Score if enabled (for completeness check)
     if use_coverage:
-        results['Coverage'] = compute_coverage_score(source, summary)
+        results['Coverage'] = compute_coverage_score(summary=summary, source=source)
 
     # Add UniEval if enabled (BLEURT backup - multi-dimensional evaluation)
     if use_unieval:
         from src.evaluators.era3_unieval import compute_unieval
-        results['UniEval'] = compute_unieval(source, summary)
+        results['UniEval'] = compute_unieval(summary=summary, source=source)
 
     # Add API-based fact-checker if enabled
     if use_factchecker:
         results['FactChecker'] = compute_factchecker_score(
-            source,
-            summary,
+            summary=summary,
+            source=source,
             model_name=factchecker_model,
             use_api=True
         )

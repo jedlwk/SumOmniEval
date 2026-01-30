@@ -23,8 +23,9 @@ _unieval_evaluator = None
 
 
 def compute_unieval(
-    source: str,
     summary: str,
+    source: str = None,
+    reference_summary: str = None,
     dimensions: Optional[List[str]] = None
 ) -> Dict:
     """
@@ -39,8 +40,9 @@ def compute_unieval(
     from a unified model. Good alternative to BLEURT which has TensorFlow conflicts. Requires model download.
 
     Args:
-        source (str): Original source document text to check consistency against
         summary (str): Generated summary text to evaluate
+        source (str, optional): Original source document text to check consistency against
+        reference_summary (str, optional): Not used for UniEval (kept for API consistency)
         dimensions (Optional[List[str]], optional): List of dimensions to evaluate.
             Options: ["coherence", "consistency", "fluency"]. Default None evaluates all three.
 
@@ -55,12 +57,24 @@ def compute_unieval(
             - note (str, optional): Indicates if fallback implementation was used
 
     Example:
-        >>> result = compute_unieval("Paris is capital.", "Paris is French capital.")
+        >>> result = compute_unieval(
+        ...     summary="Paris is French capital.",
+        ...     source="Paris is capital."
+        ... )
         >>> result['consistency']  # e.g., 0.92 (high factual consistency)
         >>> result['interpretations']['consistency']  # "Excellent"
         >>> result['coherence']  # e.g., 0.88
     """
     global _unieval_evaluator
+
+    # Validate required parameters
+    if source is None:
+        return {
+            'coherence': None,
+            'consistency': None,
+            'fluency': None,
+            'error': 'Source document is required for UniEval evaluation'
+        }
 
     if dimensions is None:
         dimensions = ["coherence", "consistency", "fluency"]
@@ -104,7 +118,7 @@ def compute_unieval(
 
     except ImportError:
         # UniEval not installed - try alternative approach using transformers directly
-        return _compute_unieval_fallback(source, summary, dimensions)
+        return _compute_unieval_fallback(summary, source, dimensions)
 
     except Exception as e:
         return {
@@ -116,8 +130,8 @@ def compute_unieval(
 
 
 def _compute_unieval_fallback(
-    source: str,
     summary: str,
+    source: str,
     dimensions: List[str]
 ) -> Dict:
     """
@@ -131,8 +145,8 @@ def _compute_unieval_fallback(
     Internal fallback function called automatically by compute_unieval().
 
     Args:
-        source (str): Original source document text
         summary (str): Generated summary to evaluate
+        source (str): Original source document text
         dimensions (List[str]): List of dimensions to evaluate (coherence, consistency, fluency)
 
     Returns:
@@ -237,7 +251,11 @@ def _interpret_unieval_score(score: Optional[float]) -> str:
         return "Very Poor"
 
 
-def compute_all_unieval_metrics(source: str, summary: str) -> Dict[str, Dict]:
+def compute_all_unieval_metrics(
+    summary: str,
+    source: str = None,
+    reference_summary: str = None
+) -> Dict[str, Dict]:
     """
     Run all UniEval dimensions (coherence, consistency, fluency) in a single evaluation call.
 
@@ -249,8 +267,9 @@ def compute_all_unieval_metrics(source: str, summary: str) -> Dict[str, Dict]:
     Wrapper function that calls compute_unieval() with all dimensions enabled.
 
     Args:
-        source (str): Original source document text to check consistency against
         summary (str): Generated summary text to evaluate
+        source (str, optional): Original source document text to check consistency against
+        reference_summary (str, optional): Not used for UniEval (kept for API consistency)
 
     Returns:
         Dict[str, Dict]: Dictionary with single key 'UniEval' mapping to results:
@@ -258,12 +277,26 @@ def compute_all_unieval_metrics(source: str, summary: str) -> Dict[str, Dict]:
               (same format as compute_unieval() return value)
 
     Example:
-        >>> results = compute_all_unieval_metrics("Source text...", "Summary text...")
+        >>> results = compute_all_unieval_metrics(
+        ...     summary="Summary text...",
+        ...     source="Source text..."
+        ... )
         >>> results['UniEval']['coherence']  # e.g., 0.85
         >>> results['UniEval']['consistency']  # e.g., 0.90
         >>> results['UniEval']['fluency']  # e.g., 0.88
         >>> list(results.keys())  # ['UniEval']
     """
+    # Validate required parameters
+    if source is None:
+        return {
+            'UniEval': {
+                'coherence': None,
+                'consistency': None,
+                'fluency': None,
+                'error': 'Source document is required for UniEval evaluation'
+            }
+        }
+
     return {
-        'UniEval': compute_unieval(source, summary)
+        'UniEval': compute_unieval(summary=summary, source=source)
     }

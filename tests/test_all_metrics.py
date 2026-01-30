@@ -15,6 +15,8 @@ Run with: python -m pytest tests/test_all_metrics.py -v
 import os
 import sys
 
+from src.evaluators.era3_llm_judge import evaluate_relevance
+
 # Add paths
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
@@ -178,7 +180,10 @@ class TestEra1LexicalMetrics:
     def test_all_era1_metrics(self):
         """Test compute_all_era1_metrics returns all metrics."""
         from src.evaluators.era1_word_overlap import compute_all_era1_metrics
-        results = compute_all_era1_metrics(REFERENCE_TEXT, SUMMARY_GOOD)
+        results = compute_all_era1_metrics(
+            summary=SUMMARY_GOOD,
+            reference_summary=REFERENCE_TEXT,  # Compare against reference, not source
+        )
 
         expected_metrics = ['ROUGE', 'BLEU', 'METEOR', 'chrF++', 'Levenshtein', 'Perplexity']
         for metric in expected_metrics:
@@ -223,7 +228,10 @@ class TestEra2SemanticMetrics:
     def test_all_era2_metrics(self):
         """Test compute_all_era2_metrics returns all metrics."""
         from src.evaluators.era2_embeddings import compute_all_era2_metrics
-        results = compute_all_era2_metrics(REFERENCE_TEXT, SUMMARY_GOOD)
+        results = compute_all_era2_metrics(
+            summary=SUMMARY_GOOD,
+            reference_summary=REFERENCE_TEXT,  # Compare against reference, not source
+        )
 
         assert 'BERTScore' in results
         assert 'MoverScore' in results
@@ -308,8 +316,8 @@ class TestEra3AFaithfulnessMetrics:
         """Test compute_all_era3_metrics returns all enabled metrics."""
         from src.evaluators.era3_logic_checkers import compute_all_era3_metrics
         results = compute_all_era3_metrics(
-            SOURCE_TEXT,
-            SUMMARY_GOOD,
+            summary=SUMMARY_GOOD,
+            source=SOURCE_TEXT,
             use_factcc=True,
             use_alignscore=True,
             use_coverage=True,
@@ -377,8 +385,8 @@ class TestCompletenessMetrics:
         """Test compute_all_completeness_metrics returns all enabled metrics."""
         from src.evaluators.completeness_metrics import compute_all_completeness_metrics
         results = compute_all_completeness_metrics(
-            SOURCE_TEXT,
-            SUMMARY_GOOD,
+            summary=SUMMARY_GOOD,
+            source=SOURCE_TEXT,
             use_semantic_coverage=True,
             use_bertscore_recall=True,
             use_bartscore=False  # Skip large model
@@ -419,8 +427,8 @@ class TestEra3BLLMJudge:
         from src.evaluators.era3_llm_judge import evaluate_faithfulness
 
         result = evaluate_faithfulness(
-            SOURCE_TEXT,
-            SUMMARY_GOOD,
+            summary=SUMMARY_GOOD,
+            source=SOURCE_TEXT,
             model_name='meta-llama/Llama-3.3-70B-Instruct',
             timeout=90
         )
@@ -438,7 +446,7 @@ class TestEra3BLLMJudge:
         from src.evaluators.era3_llm_judge import evaluate_coherence
 
         result = evaluate_coherence(
-            SUMMARY_GOOD,
+            summary=SUMMARY_GOOD,
             model_name='meta-llama/Llama-3.3-70B-Instruct',
             timeout=90
         )
@@ -455,8 +463,8 @@ class TestEra3BLLMJudge:
         from src.evaluators.era3_llm_judge import evaluate_relevance
 
         result = evaluate_relevance(
-            SOURCE_TEXT,
-            SUMMARY_GOOD,
+            summary=SUMMARY_GOOD,
+            source=SOURCE_TEXT,
             model_name='meta-llama/Llama-3.3-70B-Instruct',
             timeout=90
         )
@@ -473,7 +481,7 @@ class TestEra3BLLMJudge:
         from src.evaluators.era3_llm_judge import evaluate_fluency
 
         result = evaluate_fluency(
-            SUMMARY_GOOD,
+            summary=SUMMARY_GOOD,
             model_name='meta-llama/Llama-3.3-70B-Instruct',
             timeout=90
         )
@@ -490,8 +498,8 @@ class TestEra3BLLMJudge:
         from src.evaluators.era3_llm_judge import evaluate_dag
 
         result = evaluate_dag(
-            SOURCE_TEXT,
-            SUMMARY_GOOD,
+            summary=SUMMARY_GOOD,
+            source=SOURCE_TEXT,
             model_name='meta-llama/Llama-3.3-70B-Instruct',
             timeout=90
         )
@@ -508,10 +516,9 @@ class TestEra3BLLMJudge:
 
         from src.evaluators.era3_llm_judge import evaluate_prometheus
 
-        # Prometheus takes (reference_summary, summary, model_name, timeout)
         result = evaluate_prometheus(
-            REFERENCE_TEXT,
-            SUMMARY_GOOD,
+            summary=SUMMARY_GOOD,
+            reference_summary=REFERENCE_TEXT,
             model_name='meta-llama/Llama-3.3-70B-Instruct',
             timeout=90
         )
@@ -528,9 +535,9 @@ class TestEra3BLLMJudge:
         from src.evaluators.era3_llm_judge import evaluate_all
 
         results = evaluate_all(
-            SOURCE_TEXT,
-            REFERENCE_TEXT,
-            SUMMARY_GOOD,
+            summary=SUMMARY_GOOD,
+            source=SOURCE_TEXT,
+            reference_summary=REFERENCE_TEXT,
             model_name='meta-llama/Llama-3.3-70B-Instruct',
             timeout=90,
             include_dag=True,
@@ -600,7 +607,10 @@ class TestIntegration:
     def test_full_era1_pipeline(self):
         """Test full Era 1 evaluation pipeline."""
         from src.evaluators.era1_word_overlap import compute_all_era1_metrics
-        results = compute_all_era1_metrics(REFERENCE_TEXT, SUMMARY_GOOD)
+        results = compute_all_era1_metrics(
+            summary=SUMMARY_GOOD,
+            reference_summary=REFERENCE_TEXT,  # Compare against reference, not source
+        )
 
         # All metrics should return without exceptions
         assert len(results) == 6
@@ -610,7 +620,10 @@ class TestIntegration:
     def test_full_era2_pipeline(self):
         """Test full Era 2 evaluation pipeline."""
         from src.evaluators.era2_embeddings import compute_all_era2_metrics
-        results = compute_all_era2_metrics(REFERENCE_TEXT, SUMMARY_GOOD)
+        results = compute_all_era2_metrics(
+            summary=SUMMARY_GOOD,
+            reference_summary=REFERENCE_TEXT,  # Compare against reference, not source
+        )
 
         assert 'BERTScore' in results
         assert 'MoverScore' in results
@@ -619,8 +632,8 @@ class TestIntegration:
         """Test full Era 3A evaluation pipeline."""
         from src.evaluators.era3_logic_checkers import compute_all_era3_metrics
         results = compute_all_era3_metrics(
-            SOURCE_TEXT,
-            SUMMARY_GOOD,
+            summary=SUMMARY_GOOD,
+            source=SOURCE_TEXT,
             use_factcc=True,
             use_alignscore=True,
             use_coverage=True,

@@ -1106,27 +1106,51 @@ def batch_evaluate_dataset(df: pd.DataFrame, source_col: str, reference_col: str
 
         try:
             # G-Eval Faithfulness (this serves as our fact-checking metric)
-            faithfulness_result = evaluate_faithfulness(source_text, summary_text, model_name)
+            faithfulness_result = evaluate_faithfulness(
+                summary=summary_text,
+                source=source_text,
+                model_name=model_name
+            )
             results_df.at[idx, 'geval_faithfulness'] = faithfulness_result.get('score', None)
 
             # G-Eval Coherence
-            coherence_result = evaluate_coherence(summary_text, model_name)
+            coherence_result = evaluate_coherence(
+                summary=summary_text,
+                source=source_text,
+                model_name=model_name
+            )
             results_df.at[idx, 'geval_coherence'] = coherence_result.get('score', None)
 
             # G-Eval Relevance
-            relevance_result = evaluate_relevance(source_text, summary_text, model_name)
+            relevance_result = evaluate_relevance(
+                summary=summary_text,
+                source=source_text,
+                model_name=model_name
+            )
             results_df.at[idx, 'geval_relevance'] = relevance_result.get('score', None)
 
             # G-Eval Fluency
-            fluency_result = evaluate_fluency(summary_text, model_name)
+            fluency_result = evaluate_fluency(
+                summary=summary_text,
+                source=source_text,
+                model_name=model_name
+            )
             results_df.at[idx, 'geval_fluency'] = fluency_result.get('score', None)
 
             # DAG
-            dag_result = evaluate_dag(source_text, summary_text, model_name)
+            dag_result = evaluate_dag(
+                summary=summary_text,
+                source=source_text,
+                model_name=model_name
+            )
             results_df.at[idx, 'dag_score'] = dag_result.get('raw_score', None)
 
             # Prometheus
-            prometheus_result = evaluate_prometheus(reference_text, summary_text, model_name)
+            prometheus_result = evaluate_prometheus(
+                summary=summary_text,
+                reference_summary=reference_text,
+                model_name=model_name
+            )
             results_df.at[idx, 'prometheus_score'] = prometheus_result.get('score', None)
 
 
@@ -1674,8 +1698,8 @@ def main():
 
                     with st.spinner(spinner_text):
                         results["faithfulness"] = compute_all_era3_metrics(
-                            source_text,
-                            summary_text,
+                            summary=summary_text,
+                            source=source_text,
                             use_factcc=use_factcc,
                             use_alignscore=use_alignscore,
                             use_coverage=use_coverage,
@@ -1687,8 +1711,8 @@ def main():
                 # Part 1B: Completeness (Local) - Semantic Coverage metrics
                 with st.spinner("📦 Part 1: Completeness Check (Semantic Coverage + BERTScore Recall)..."):
                     results["completeness_local"] = compute_all_completeness_metrics(
-                        source_text,
-                        summary_text,
+                        summary=summary_text,
+                        source=source_text,
                         use_semantic_coverage=True,
                         use_bertscore_recall=True,
                         use_bartscore=False  # Skip BARTScore for now (large model)
@@ -1704,9 +1728,9 @@ def main():
                     with st.spinner(spinner_text):
                         try:
                             results["completeness"] = evaluate_all(
-                                source_text,
-                                reference_text if has_reference else "",
-                                summary_text,
+                                summary=summary_text,
+                                source=source_text,
+                                reference_summary=reference_text if has_reference else None,
                                 model_name=st.session_state.selected_model,
                                 timeout=90,
                                 include_dag=use_dag,
@@ -1726,16 +1750,16 @@ def main():
                     if run_era2:
                         with st.spinner("🧠 Part 2: Semantic Conformance (BERTScore + MoverScore)..."):
                             results["semantic"] = compute_all_era2_metrics(
-                                reference_text,  # Compare against reference, not source
-                                summary_text
+                                summary=summary_text,
+                                reference_summary=reference_text,  # Compare against reference, not source
                             )
 
                     # Part 2B: Lexical Conformance (ROUGE, BLEU, METEOR)
                     if run_era1:
                         with st.spinner("📝 Part 2: Lexical Conformance (ROUGE, BLEU, METEOR)..."):
                             results["lexical"] = compute_all_era1_metrics(
-                                reference_text,  # Compare against reference, not source
-                                summary_text
+                                summary=summary_text,
+                                reference_summary=reference_text,  # Compare against reference, not source
                             )
 
             st.session_state.results = results

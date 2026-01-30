@@ -363,8 +363,9 @@ def query_llm(
 
 
 def evaluate_faithfulness(
-    source: str,
     summary: str,
+    source: str = None,
+    reference_summary: str = None,
     model_name: str = 'meta-llama/Llama-3.3-70B-Instruct',
     timeout: int = 60
 ) -> Dict[str, Any]:
@@ -379,8 +380,9 @@ def evaluate_faithfulness(
     Slower than local models but more thorough. Requires H2OGPTE API.
 
     Args:
-        source (str): Original source document to verify claims against
-        summary (str): Generated summary to fact-check
+        summary (str): Generated summary text to evaluate
+        source (str, optional): Source document text to compare against
+        reference_summary (str, optional): Reference summary that represents ideal quality
         model_name (str, optional): H2OGPTE LLM model. Default "meta-llama/Llama-3.3-70B-Instruct"
         timeout (int, optional): API timeout in seconds. Default 60
 
@@ -393,11 +395,21 @@ def evaluate_faithfulness(
             - error (str, optional): Error message if API call failed
 
     Example:
-        >>> result = evaluate_faithfulness("Paris is capital.", "Paris is French capital.")
+        >>> result = evaluate_faithfulness(
+        ...     summary="Paris is French capital.",
+        ...     source="Paris is capital."
+        ... )
         >>> result['raw_score']  # e.g., 9 (highly faithful)
         >>> result['explanation']  # "All claims directly supported by source"
     """
     try:
+        # Validate required parameters
+        if source is None:
+            return {
+                'score': None,
+                'error': 'Source document is required for faithfulness evaluation'
+            }
+
         prompt = create_faithfulness_prompt(source, summary)
         response = query_llm(prompt, model_name, timeout)
         score, explanation = parse_llm_response(response)
@@ -426,6 +438,8 @@ def evaluate_faithfulness(
 
 def evaluate_coherence(
     summary: str,
+    source: str = None,
+    reference_summary: str = None,
     model_name: str = 'meta-llama/Llama-3.3-70B-Instruct',
     timeout: int = 60
 ) -> Dict[str, Any]:
@@ -440,7 +454,9 @@ def evaluate_coherence(
     Requires H2OGPTE API access. No token limits unlike local coherence models.
 
     Args:
-        summary (str): Generated summary text to evaluate for logical flow
+        summary (str): Generated summary text to evaluate
+        source (str, optional): Source document text to compare against
+        reference_summary (str, optional): Reference summary that represents ideal quality
         model_name (str, optional): H2OGPTE LLM model. Default "meta-llama/Llama-3.3-70B-Instruct"
         timeout (int, optional): API timeout in seconds. Default 60
 
@@ -484,8 +500,9 @@ def evaluate_coherence(
 
 
 def evaluate_relevance(
-    source: str,
     summary: str,
+    source: str = None,
+    reference_summary: str = None,
     model_name: str = 'meta-llama/Llama-3.3-70B-Instruct',
     timeout: int = 60
 ) -> Dict[str, Any]:
@@ -500,8 +517,9 @@ def evaluate_relevance(
     Requires H2OGPTE API access. Can handle full-length documents unlike token-limited local models.
 
     Args:
-        source (str): Original source document containing the key information
-        summary (str): Generated summary to evaluate for relevance/completeness
+        summary (str): Generated summary text to evaluate
+        source (str, optional): Source document text to compare against
+        reference_summary (str, optional): Reference summary that represents ideal quality
         model_name (str, optional): H2OGPTE LLM model. Default "meta-llama/Llama-3.3-70B-Instruct"
         timeout (int, optional): API timeout in seconds. Default 60
 
@@ -514,11 +532,21 @@ def evaluate_relevance(
             - error (str, optional): Error message if API call failed
 
     Example:
-        >>> result = evaluate_relevance("Main point A. Detail B.", "Summary of point A.")
+        >>> result = evaluate_relevance(
+        ...     summary="Summary of point A.",
+        ...     source="Main point A. Detail B."
+        ... )
         >>> result['raw_score']  # e.g., 7 (good but missing detail B)
         >>> result['explanation']  # "Captures main point but omits some details"
     """
     try:
+        # Validate required parameters
+        if source is None:
+            return {
+                'score': None,
+                'error': 'Source document is required for relevance evaluation'
+            }
+
         prompt = create_relevance_prompt(source, summary)
         response = query_llm(prompt, model_name, timeout)
         score, explanation = parse_llm_response(response)
@@ -546,6 +574,8 @@ def evaluate_relevance(
 
 def evaluate_fluency(
     summary: str,
+    source: str = None,
+    reference_summary: str = None,
     model_name: str = 'meta-llama/Llama-3.3-70B-Instruct',
     timeout: int = 60
 ) -> Dict[str, Any]:
@@ -560,7 +590,9 @@ def evaluate_fluency(
     Requires H2OGPTE API access. More nuanced than simple grammar checkers.
 
     Args:
-        summary (str): Generated summary text to evaluate for fluency
+        summary (str): Generated summary text to evaluate
+        source (str, optional): Source document text to compare against
+        reference_summary (str, optional): Reference summary that represents ideal quality
         model_name (str, optional): H2OGPTE LLM model. Default "meta-llama/Llama-3.3-70B-Instruct"
         timeout (int, optional): API timeout in seconds. Default 60
 
@@ -604,8 +636,9 @@ def evaluate_fluency(
 
 
 def evaluate_dag(
-    source: str,
     summary: str,
+    source: str = None,
+    reference_summary: str = None,
     model_name: str = 'meta-llama/Llama-3.3-70B-Instruct',
     timeout: int = 60
 ) -> Dict[str, Any]:
@@ -621,8 +654,9 @@ def evaluate_dag(
     Provides more granular feedback than single-score metrics. Requires H2OGPTE API access.
 
     Args:
-        source (str): Original source document to verify claims and completeness against
-        summary (str): Generated summary to evaluate through decision tree
+        summary (str): Generated summary text to evaluate
+        source (str, optional): Source document text to compare against
+        reference_summary (str, optional): Reference summary that represents ideal quality
         model_name (str, optional): H2OGPTE LLM model. Default "meta-llama/Llama-3.3-70B-Instruct"
         timeout (int, optional): API timeout in seconds. Default 60
 
@@ -638,13 +672,23 @@ def evaluate_dag(
             - error (str, optional): Error message if API call failed
 
     Example:
-        >>> result = evaluate_dag("Paris is in France.", "Paris is French capital.")
+        >>> result = evaluate_dag(
+        ...     summary="Paris is French capital.",
+        ...     source="Paris is in France."
+        ... )
         >>> result['raw_score']  # e.g., 5 (out of 6)
         >>> result['step1_factual']  # e.g., 2 (yes, factually correct)
         >>> result['step2_completeness']  # e.g., 2 (yes, covers main point)
         >>> result['step3_clarity']  # e.g., 1 (mostly clear)
     """
     try:
+        # Validate required parameters
+        if source is None:
+            return {
+                'score': None,
+                'error': 'Source document is required for DAG evaluation'
+            }
+
         prompt = f"""
         You are an expert evaluator using a structured decision tree approach (DAG - Directed Acyclic Graph).
 
@@ -792,8 +836,9 @@ def create_prometheus_absolute_prompt() -> str:
 
 
 def evaluate_prometheus(
-    reference_summary: str,
     summary: str,
+    source: str = None,
+    reference_summary: str = None,
     model_name: str = 'meta-llama/Llama-3.3-70B-Instruct',
     timeout: int = 60
 ) -> Dict[str, Any]:
@@ -808,8 +853,9 @@ def evaluate_prometheus(
     Requires H2OGPTE API access. More structured than simple comparison metrics.
 
     Args:
-        reference_summary (str): Reference summary that represents a score of 5 (ideal quality)
-        summary (str): Generated summary to evaluate against the reference
+        summary (str): Generated summary text to evaluate
+        source (str, optional): Source document text to compare against
+        reference_summary (str, optional): Reference summary that represents ideal quality
         model_name (str, optional): H2OGPTE LLM model. Default "meta-llama/Llama-3.3-70B-Instruct"
         timeout (int, optional): API timeout in seconds. Default 60
 
@@ -822,11 +868,21 @@ def evaluate_prometheus(
             - error (str, optional): Error message if API call failed
 
     Example:
-        >>> result = evaluate_prometheus("Paris is France's capital.", "Paris is French capital.")
+        >>> result = evaluate_prometheus(
+        ...     summary="Paris is French capital.",
+        ...     reference_summary="Paris is France's capital."
+        ... )
         >>> result['raw_score']  # e.g., 4 (out of 5, good information density)
         >>> result['explanation']  # "Captures essential facts concisely..."
     """
     try:
+        # Validate required parameters
+        if reference_summary is None:
+            return {
+                'score': None,
+                'error': 'Reference summary is required for Prometheus evaluation'
+            }
+
         system_prompt = "You are a fair judge assistant tasked with providing clear, objective feedback based on specific criteria, ensuring each assessment reflects the absolute standards set for performance."
         instruction = "Summarize the provided source text concisely without losing the core message or factual accuracy."
         rubric = "Which summary exhibits better 'Information Density'? A superior summary should include all essential facts from the source while using fewer words and maintaining a more logical flow than its competitor."
@@ -865,9 +921,9 @@ def evaluate_prometheus(
 
 
 def evaluate_all(
-    source: str,
-    reference_summary: str,
     summary: str,
+    source: str = None,
+    reference_summary: str = None,
     model_name: str = 'meta-llama/Llama-3.3-70B-Instruct',
     timeout: int = 60,
     include_dag: bool = False,
@@ -887,9 +943,9 @@ def evaluate_all(
     Requires H2OGPTE API access. Allows full-length documents unlike local models.
 
     Args:
-        source (str): Original source document text
-        reference_summary (str): Reference summary for comparison (used only for Prometheus if enabled)
         summary (str): Generated summary to evaluate
+        source (str, optional): Original source document text (required for faithfulness, relevance, DAG)
+        reference_summary (str, optional): Reference summary for comparison (required for Prometheus if enabled)
         model_name (str, optional): H2OGPTE model. Default "meta-llama/Llama-3.3-70B-Instruct"
         timeout (int, optional): Timeout per API call in seconds. Default 60
         include_dag (bool, optional): Enable DAG decision tree evaluation (factual+complete+clear). Default False
@@ -907,9 +963,9 @@ def evaluate_all(
 
     Example:
         >>> results = evaluate_all(
-        ...     "Paris is capital of France.",
-        ...     "Paris is France's capital.",
-        ...     "Paris is French capital.",
+        ...     summary="Paris is French capital.",
+        ...     source="Paris is capital of France.",
+        ...     reference_summary="Paris is France's capital.",
         ...     include_dag=True
         ... )
         >>> results['faithfulness']['raw_score']  # e.g., 9
@@ -918,18 +974,48 @@ def evaluate_all(
         >>> list(results.keys())  # ['faithfulness', 'coherence', 'relevance', 'fluency', 'dag']
     """
     results = {
-        'faithfulness': evaluate_faithfulness(source, summary, model_name, timeout),
-        'coherence': evaluate_coherence(summary, model_name, timeout),
-        'relevance': evaluate_relevance(source, summary, model_name, timeout),
-        'fluency': evaluate_fluency(summary, model_name, timeout),
+        'faithfulness': evaluate_faithfulness(
+            summary=summary,
+            source=source,
+            model_name=model_name,
+            timeout=timeout
+        ),
+        'coherence': evaluate_coherence(
+            summary=summary,
+            source=source,
+            model_name=model_name,
+            timeout=timeout
+        ),
+        'relevance': evaluate_relevance(
+            summary=summary,
+            source=source,
+            model_name=model_name,
+            timeout=timeout
+        ),
+        'fluency': evaluate_fluency(
+            summary=summary,
+            source=source,
+            model_name=model_name,
+            timeout=timeout
+        ),
     }
 
     # Add DAG if requested
     if include_dag:
-        results['dag'] = evaluate_dag(source, summary, model_name, timeout)
+        results['dag'] = evaluate_dag(
+            summary=summary,
+            source=source,
+            model_name=model_name,
+            timeout=timeout
+        )
 
     # Add Prometheus if requested
     if include_prometheus:
-        results['prometheus'] = evaluate_prometheus(reference_summary, summary, model_name, timeout)
+        results['prometheus'] = evaluate_prometheus(
+            summary=summary,
+            reference_summary=reference_summary,
+            model_name=model_name,
+            timeout=timeout
+        )
 
     return results

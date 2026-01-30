@@ -23,8 +23,9 @@ _MOVERSCORE_ERROR_MSG = None
 
 
 def compute_bertscore(
-    source: str,
     summary: str,
+    source: str = None,
+    reference_summary: str = None,
     model_type: str = "distilbert-base-uncased"
 ) -> Dict[str, float]:
     """
@@ -39,8 +40,9 @@ def compute_bertscore(
     even if using completely different words (semantic conformance).
 
     Args:
-        source (str): Reference text to compare against
         summary (str): Generated summary text to evaluate
+        source (str, optional): Source document text to compare against
+        reference_summary (str, optional): Reference summary that represents ideal quality
         model_type (str, optional): HuggingFace BERT model name. Default "distilbert-base-uncased" (~250MB)
 
     Returns:
@@ -51,17 +53,32 @@ def compute_bertscore(
             - error (str, optional): Error message if bert-score package not installed
 
     Example:
-        >>> result = compute_bertscore("The cat sat on the mat.", "A feline rested on a rug.")
+        >>> result = compute_bertscore(
+        ...     summary="A feline rested on a rug.",
+        ...     source="The cat sat on the mat."
+        ... )
         >>> result['f1']  # e.g., 0.82 (high semantic similarity despite different words)
         >>> result['precision']  # e.g., 0.85
     """
     try:
         from bert_score import score
 
+        # Validate required parameters
+        if source is None and reference_summary is None:
+            return {
+                'precision': None,
+                'recall': None,
+                'f1': None,
+                'error': 'Either source or reference_summary must be provided'
+            }
+
+        # Use source if provided, otherwise use reference_summary
+        comparison_text = source if source is not None else reference_summary
+
         # Compute BERTScore
         P, R, F1 = score(
             [summary],
-            [source],
+            [comparison_text],
             model_type=model_type,
             verbose=False,
             device='cpu'  # Use 'cuda' if GPU available
@@ -83,8 +100,9 @@ def compute_bertscore(
 
 
 def compute_moverscore(
-    source: str,
     summary: str,
+    source: str = None,
+    reference_summary: str = None,
     model_name: str = "distilbert-base-uncased"
 ) -> Dict[str, float]:
     """
@@ -101,8 +119,9 @@ def compute_moverscore(
     Note: This package has known issues with CPU-only PyTorch. May return error if not properly configured.
 
     Args:
-        source (str): Reference text to compare against
         summary (str): Generated summary text to evaluate
+        source (str, optional): Source document text to compare against
+        reference_summary (str, optional): Reference summary that represents ideal quality
         model_name (str, optional): HuggingFace model for embeddings. Default "distilbert-base-uncased"
 
     Returns:
@@ -111,7 +130,10 @@ def compute_moverscore(
             - error (str, optional): Error message if moverscore-v2 not installed or CUDA issues
 
     Example:
-        >>> result = compute_moverscore("The cat sat.", "A feline was sitting.")
+        >>> result = compute_moverscore(
+        ...     summary="A feline was sitting.",
+        ...     source="The cat sat."
+        ... )
         >>> result['moverscore']  # e.g., 0.52 (moderate semantic alignment)
     """
     global _MOVERSCORE_UNAVAILABLE, _MOVERSCORE_ERROR_MSG
@@ -122,6 +144,16 @@ def compute_moverscore(
             'moverscore': 0.0,
             'error': _MOVERSCORE_ERROR_MSG or "MoverScore unavailable (previous import failed)"
         }
+
+    # Validate required parameters
+    if source is None and reference_summary is None:
+        return {
+            'moverscore': None,
+            'error': 'Either source or reference_summary must be provided'
+        }
+
+    # Use source if provided, otherwise use reference_summary
+    comparison_text = source if source is not None else reference_summary
 
     # Use the safe wrapper to import MoverScore
     try:
@@ -144,7 +176,7 @@ def compute_moverscore(
             }
 
         # Prepare texts (MoverScore expects list of strings, not list of word lists)
-        references = [source]
+        references = [comparison_text]
         hypotheses = [summary]
 
         # Create IDF dictionary (uniform weights for simplicity)
@@ -204,7 +236,11 @@ def compute_moverscore(
         }
 
 
-def compute_all_era2_metrics(source: str, summary: str) -> Dict[str, Dict[str, float]]:
+def compute_all_era2_metrics(
+    summary: str,
+    source: str = None,
+    reference_summary: str = None
+) -> Dict[str, Dict[str, float]]:
     """
     Run all embedding-based semantic similarity metrics to compare summary against reference.
 
@@ -216,8 +252,9 @@ def compute_all_era2_metrics(source: str, summary: str) -> Dict[str, Dict[str, f
     summary, even if using completely different vocabulary or sentence structures.
 
     Args:
-        source (str): Reference text to compare against
         summary (str): Generated summary text to evaluate
+        source (str, optional): Source document text to compare against
+        reference_summary (str, optional): Reference summary that represents ideal quality
 
     Returns:
         Dict[str, Dict[str, float]]: Dictionary mapping metric names to their results:
@@ -226,12 +263,23 @@ def compute_all_era2_metrics(source: str, summary: str) -> Dict[str, Dict[str, f
             Each value is a dict with score keys and possibly 'error'.
 
     Example:
-        >>> results = compute_all_era2_metrics("The quick brown fox jumps.", "A fast auburn fox leaps.")
+        >>> results = compute_all_era2_metrics(
+        ...     summary="A fast auburn fox leaps.",
+        ...     source="The quick brown fox jumps."
+        ... )
         >>> results['BERTScore']['f1']  # e.g., 0.88 (high semantic match)
         >>> results['MoverScore']['moverscore']  # e.g., 0.65
         >>> list(results.keys())  # ['BERTScore', 'MoverScore']
     """
     return {
-        'BERTScore': compute_bertscore(source, summary),
-        'MoverScore': compute_moverscore(source, summary)
+        'BERTScore': compute_bertscore(
+            summary=summary,
+            source=source,
+            reference_summary=reference_summary
+        ),
+        'MoverScore': compute_moverscore(
+            summary=summary,
+            source=source,
+            reference_summary=reference_summary
+        )
     }

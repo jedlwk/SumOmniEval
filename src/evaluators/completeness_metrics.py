@@ -11,7 +11,7 @@ Metrics:
 """
 
 import os
-from typing import Dict, List
+from typing import Dict, List, Optional
 import warnings
 
 # Force CPU mode
@@ -20,8 +20,9 @@ warnings.filterwarnings('ignore')
 
 
 def compute_semantic_coverage(
-    source: str,
     summary: str,
+    source: Optional[str] = None,
+    reference_summary: Optional[str] = None,
     model_name: str = "all-MiniLM-L6-v2",
     threshold: float = 0.7
 ) -> Dict:
@@ -36,8 +37,9 @@ def compute_semantic_coverage(
     Use this when: You want to check if the summary is complete and captures all key points.
 
     Args:
-        source (str): Original source document text to summarize
         summary (str): Generated summary text to evaluate
+        source (str, optional): Original source document text to summarize
+        reference_summary (str, optional): Reference summary that represents a score of 5 (ideal quality)
         model_name (str, optional): Sentence embedding model name. Default "all-MiniLM-L6-v2" (~80MB)
         threshold (float, optional): Cosine similarity threshold (0-1) to count a sentence as "covered".
                                      Default 0.7 means 70% semantic similarity required.
@@ -52,13 +54,26 @@ def compute_semantic_coverage(
             - error (str, optional): Error message if computation failed
 
     Example:
-        >>> result = compute_semantic_coverage("The cat sat. The dog ran.", "A cat was sitting.")
+        >>> result = compute_semantic_coverage(
+        ...     summary="A cat was sitting.",
+        ...     source="The cat sat. The dog ran."
+        ... )
         >>> result['score']  # e.g., 0.5 (1 out of 2 sentences covered)
         >>> result['covered_sentences']  # 1
     """
     try:
         from sentence_transformers import SentenceTransformer
         import numpy as np
+
+        # Validate required parameters
+        if source is None and reference_summary is None:
+            return {
+                'score': None,
+                'error': 'Either source or reference_summary must be provided'
+            }
+
+        # Use source if provided, otherwise use reference_summary
+        comparison_text = source if source is not None else reference_summary
 
         # Split into sentences
         def split_sentences(text):
@@ -67,7 +82,7 @@ def compute_semantic_coverage(
             sentences = re.split(r'(?<=[.!?])\s+', text.strip())
             return [s.strip() for s in sentences if s.strip()]
 
-        source_sentences = split_sentences(source)
+        source_sentences = split_sentences(comparison_text)
         summary_sentences = split_sentences(summary)
 
         if not source_sentences:
@@ -151,8 +166,9 @@ def _interpret_semantic_coverage(score: float) -> str:
 
 
 def compute_bertscore_recall_source(
-    source: str,
-    summary: str
+    summary: str,
+    source: Optional[str] = None,
+    reference_summary: Optional[str] = None,
 ) -> Dict:
     """
     Measure what fraction of the source document's meaning appears in the summary using BERT embeddings.
@@ -164,8 +180,9 @@ def compute_bertscore_recall_source(
     Use this when: You want to measure semantic completeness (meaning overlap, not word overlap).
 
     Args:
-        source (str): Original source document text to summarize
         summary (str): Generated summary text to evaluate
+        source (str, optional): Original source document text to summarize
+        reference_summary (str, optional): Reference summary that represents a score of 5 (ideal quality)
 
     Returns:
         Dict: Result dictionary with keys:
@@ -176,19 +193,32 @@ def compute_bertscore_recall_source(
             - error (str, optional): Error message if bert-score package not installed
 
     Example:
-        >>> result = compute_bertscore_recall_source("Long source text...", "Short summary...")
+        >>> result = compute_bertscore_recall_source(
+        ...     summary="Short summary...",
+        ...     source="Long source text..."
+        ... )
         >>> result['recall']  # e.g., 0.45 (45% of source meaning captured)
         >>> result['interpretation']  # "Moderate Coverage"
     """
     try:
         from bert_score import score as bert_score
 
+        # Validate required parameters
+        if source is None and reference_summary is None:
+            return {
+                'recall': None,
+                'error': 'Either source or reference_summary must be provided'
+            }
+
+        # Use source if provided, otherwise use reference_summary
+        comparison_text = source if source is not None else reference_summary
+
         # BERTScore expects references and candidates
         # For completeness: how much of source is captured in summary
-        # We use summary as candidate, source as reference
+        # We use summary as candidate, source/reference as reference
         P, R, F1 = bert_score(
             [summary],  # candidates
-            [source],   # references
+            [comparison_text],   # references
             lang='en',
             rescale_with_baseline=True,
             device='cpu'
@@ -228,8 +258,9 @@ def _interpret_bertscore_recall(score: float) -> str:
 
 
 def compute_bartscore(
-    source: str,
     summary: str,
+    source: Optional[str] = None,
+    reference_summary: Optional[str] = None,
     model_name: str = "facebook/bart-large-cnn"
 ) -> Dict:
     """
@@ -243,8 +274,9 @@ def compute_bartscore(
     Note: Requires downloading a large model (~1.6GB). Disabled by default.
 
     Args:
-        source (str): Original source document text to summarize
         summary (str): Generated summary text to evaluate
+        source (str, optional): Original source document text to summarize
+        reference_summary (str, optional): Reference summary that represents a score of 5 (ideal quality)
         model_name (str, optional): HuggingFace BART model name. Default "facebook/bart-large-cnn" (~1.6GB)
 
     Returns:
@@ -254,13 +286,26 @@ def compute_bartscore(
             - error (str, optional): Error message if transformers package not installed
 
     Example:
-        >>> result = compute_bartscore("Source document...", "Generated summary...")
+        >>> result = compute_bartscore(
+        ...     summary="Generated summary...",
+        ...     source="Source document..."
+        ... )
         >>> result['score']  # e.g., -2.1 (moderate quality)
         >>> result['interpretation']  # "Good"
     """
     try:
         import torch
         from transformers import BartTokenizer, BartForConditionalGeneration
+
+        # Validate required parameters
+        if source is None and reference_summary is None:
+            return {
+                'score': None,
+                'error': 'Either source or reference_summary must be provided'
+            }
+
+        # Use source if provided, otherwise use reference_summary
+        comparison_text = source if source is not None else reference_summary
 
         # Load model and tokenizer
         tokenizer = BartTokenizer.from_pretrained(model_name)
@@ -269,7 +314,7 @@ def compute_bartscore(
 
         # Tokenize
         inputs = tokenizer(
-            source,
+            comparison_text,
             return_tensors='pt',
             truncation=True,
             max_length=1024
@@ -328,8 +373,9 @@ def _interpret_bartscore(score: float) -> str:
 
 
 def compute_all_completeness_metrics(
-    source: str,
     summary: str,
+    source: Optional[str] = None,
+    reference_summary: Optional[str] = None,
     use_semantic_coverage: bool = True,
     use_bertscore_recall: bool = True,
     use_bartscore: bool = False  # Disabled by default (large model)
@@ -346,8 +392,9 @@ def compute_all_completeness_metrics(
     Use this when: You want a comprehensive completeness assessment with multiple metrics.
 
     Args:
-        source (str): Original source document text to summarize
         summary (str): Generated summary text to evaluate
+        source (str, optional): Original source document text to summarize
+        reference_summary (str, optional): Reference summary that represents a score of 5 (ideal quality)
         use_semantic_coverage (bool, optional): Enable sentence-level coverage check. Default True
         use_bertscore_recall (bool, optional): Enable BERTScore recall metric. Default True
         use_bartscore (bool, optional): Enable BARTScore (requires large model download). Default False
@@ -360,7 +407,10 @@ def compute_all_completeness_metrics(
             Each value is a dict with 'score', 'interpretation', and possibly 'error' keys.
 
     Example:
-        >>> results = compute_all_completeness_metrics("Source...", "Summary...")
+        >>> results = compute_all_completeness_metrics(
+        ...     summary="Summary...",
+        ...     source="Source..."
+        ... )
         >>> results['SemanticCoverage']['score']  # e.g., 0.65
         >>> results['BERTScoreRecall']['recall']  # e.g., 0.42
         >>> list(results.keys())  # ['SemanticCoverage', 'BERTScoreRecall']
@@ -368,12 +418,24 @@ def compute_all_completeness_metrics(
     results = {}
 
     if use_semantic_coverage:
-        results['SemanticCoverage'] = compute_semantic_coverage(source, summary)
+        results['SemanticCoverage'] = compute_semantic_coverage(
+            summary=summary,
+            source=source,
+            reference_summary=reference_summary
+        )
 
     if use_bertscore_recall:
-        results['BERTScoreRecall'] = compute_bertscore_recall_source(source, summary)
+        results['BERTScoreRecall'] = compute_bertscore_recall_source(
+            summary=summary,
+            source=source,
+            reference_summary=reference_summary
+        )
 
     if use_bartscore:
-        results['BARTScore'] = compute_bartscore(source, summary)
+        results['BARTScore'] = compute_bartscore(
+            summary=summary,
+            source=source,
+            reference_summary=reference_summary
+        )
 
     return results
