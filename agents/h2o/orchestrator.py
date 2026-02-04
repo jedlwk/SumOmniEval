@@ -122,11 +122,12 @@ def run_evaluation(client: H2OGPTE, generated_summary: str, reference_summary: s
     return reply.content
 
 
-def main(sample_key: str = "grenfell_tower", agent_type: str = "agent"):
+def main(sample_idx: str = "0", agent_type: str = "agent"):
     """Main entry point."""
-    # Load sample data
-    sample = load_summaries(sample_key)
-    print(f"Loaded sample: {sample.get('name', sample_key)}")
+    # Load sample data (field mapping is applied automatically)
+    sample = load_summaries(sample_idx=int(sample_idx))
+    sample_id = sample.get('id', sample_idx)
+    print(f"Loaded sample: {sample_id}")
 
     # Create client and setup
     client = create_client()
@@ -135,7 +136,7 @@ def main(sample_key: str = "grenfell_tower", agent_type: str = "agent"):
     # Run evaluation
     response = run_evaluation(
         client=client,
-        generated_summary=sample['generated_summary'],
+        generated_summary=sample['summary'],
         reference_summary=sample.get('reference_summary'),
         source=sample.get('source')
     )
@@ -152,7 +153,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run H2OGPTE agent evaluation")
     parser.add_argument("--agent-type", choices=["agent", "agent_with_mcp"], default="agent",
                         help="Type of agent to use for evaluation")
-    parser.add_argument("--sample", default="grenfell_tower", help="Sample key from data/sample_summaries.json")
+    parser.add_argument("--sample-idx", default="0",
+                        help="Sample index for JSON. Default: 0")
     parser.add_argument("--list", action="store_true", help="List available samples")
 
     args = parser.parse_args()
@@ -160,7 +162,9 @@ if __name__ == "__main__":
     if args.list:
         samples = load_summaries()
         print("Available samples:")
-        for key, value in samples.items():
-            print(f"  - {key}: {value.get('name', 'Unnamed')}")
+        for idx, sample in enumerate(samples):
+            sample_id = sample.get('id', f'sample_{idx}')
+            print(f"  - {idx}: {sample_id}")
+        print(f"\nTotal samples: {len(samples)}")
     else:
-        main(args.sample, args.agent_type)
+        main(args.sample_idx, args.agent_type)

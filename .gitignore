@@ -55,9 +55,28 @@ models/
 transformers_cache/
 huggingface/
 
-# Data (except sample data)
+# Data (except sample/seed data and templates)
 data/*.csv
-!data/sample_data.csv
+!data/seed_data.csv
+!data/examples/*.csv
+
+# Generated data files
+data/raw/*.json
+data/processed/*.json
+!data/raw/.gitkeep
+!data/processed/.gitkeep
+
+# Keep small example sample files (for demo/testing without API key)
+!data/raw/cnn_dm_sample.json
+!data/processed/cnn_dm_sample_with_gen_sum.json
+
+# Gitignore larger generated datasets (if created in future)
+data/raw/*_large.json
+data/processed/*_large.json
+
+# Keep example templates
+!data/examples/*.json
+!data/examples/*.xlsx
 
 # Logs
 *.log

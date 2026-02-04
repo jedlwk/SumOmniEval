@@ -4,6 +4,232 @@ All notable changes to this project are documented here.
 
 ---
 
+## [2.2.0] - 2026-02-03
+
+### Data Folder Reorganization
+
+Complete restructuring of the data folder following GitHub best practices with improved organization and documentation.
+
+### Added
+
+#### Data Processing Pipeline
+- **download_cnn_dm.py** - Downloads CNN/DailyMail articles from HuggingFace
+  - Uses streaming to save disk space
+  - Downloads 10 sample articles from abisee/cnn_dailymail dataset
+  - Outputs to `data/raw/cnn_dm_sample.json`
+  - No API key required
+- **generate_summaries.py** - Generates AI summaries using H2OGPTE API
+  - Reads from `data/raw/` folder
+  - Outputs to `data/processed/` folder
+  - Uses GPT-4o by default (configurable)
+  - Requires H2OGPTE_API_KEY and H2OGPTE_ADDRESS
+- **create_templates.py** - Creates template files in multiple formats
+  - Extracts 3 samples from processed data
+  - Generates CSV, JSON, and XLSX templates
+  - Demonstrates optional `reference_summary` field
+  - Outputs to `data/examples/` folder
+
+#### Folder Structure
+- **data/raw/** - Raw downloaded data (gitignored)
+- **data/processed/** - Processed data with AI summaries (gitignored)
+- **data/scripts/** - Data processing scripts
+- **data/examples/** - Template files (version controlled)
+
+#### Documentation
+- **data/README.md** - Consolidated, concise data folder documentation
+  - Quick start guide for data processing pipeline
+  - Script documentation with requirements
+  - Format specifications and examples
+  - Environment setup instructions
+
+### Changed
+
+#### File Organization
+- Moved all processing scripts to `data/scripts/` subdirectory
+- Separated raw data from processed data
+- Moved template files to `data/examples/`
+- Updated all script paths to use new folder structure
+
+#### Version Control
+- Updated `.gitignore` to exclude generated data files
+  - Ignores `data/raw/*.json`
+  - Ignores `data/processed/*.json`
+  - Keeps template files in version control
+- Removed redundant README files from subdirectories
+
+#### Data Sources
+- Added CNN/DailyMail dataset integration (Hermann et al., 2015)
+- Template files now demonstrate optional fields with variance
+
+#### Agent Utilities Simplification
+- Simplified `load_summaries()` to accept `sample_idx` integer
+- Changed `--sample` to `--sample-idx` for clarity
+- Uses actual field names (`summary` instead of `generated_summary`)
+
+### Removed
+
+- **sample_summaries.json** - Obsolete test data file
+- **data/scripts/README.md** - Consolidated into main README
+- **data/raw/README.md** - Consolidated into main README
+- **data/processed/README.md** - Consolidated into main README
+- **ui/pages/1_Agent_Evaluation.py** - Only standalone eval on UI
+- **ui/pages/2_MCP_Dashboard.py** - Only standalone eval on UI
+
+### Fixed
+
+- Script path resolution using `Path(__file__).parent`
+- .gitignore consistency (`seed_data.csv` vs `sample_data.csv`)
+- Template files now properly show optional `reference_summary` field
+
+---
+
+## [2.1.0] - 2026-02-02
+
+### Agent and MCP Server Integration
+
+Added orchestrator agent functionality and Model Context Protocol (MCP) server for enhanced agent-based evaluation workflows.
+
+### Added
+
+#### Agent Infrastructure
+- **shared_utils.py** - Shared utility functions
+  - `load_prompt()` - Loads prompts from markdown files
+  - `load_summaries()` - Loads summary data from JSON
+  - Cross-directory import support
+- **agents/prompts/** - Organized prompt templates
+  - `system.md` - System prompts for agents
+  - `user.md` - User prompt templates
+
+#### MCP Server
+- **MCP server implementation** - Exposes evaluation functions via Model Context Protocol
+  - Uses functions from `tool_logic.py`
+  - Enables external tools to call evaluation metrics
+  - Supports agent-based workflows
+- **bundle.py** - Automated packaging script
+  - Creates zip file for deployment
+  - Simplifies distribution
+
+#### Agent Modes
+- **agent_mode** - H2OGPTe agent with direct function calling
+- **agent_with_mcp** - H2OGPTe agent using MCP server integration
+
+#### Frontend Features
+- **Agent Evaluation page** - New Streamlit page for agent-based evaluation
+- **MCP Dashboard page** - Monitor and manage MCP server connections
+  - Note: Further testing required
+
+#### Data Management
+- **data/sample_summaries.json** - Sample data for agent testing
+  - Moved from root to data folder
+
+### Changed
+
+#### Orchestrator Refactoring
+- Refactored `orchestrator.py` to use shared functions
+  - Replaced hardcoded values with utility functions
+  - Improved modularity and maintainability
+- Updated file path resolution for cross-directory imports
+
+#### Build Configuration
+- Updated `.gitignore` to exclude:
+  - `.zip` files (agent bundles)
+  - `mcp_server/dist_mcp/` (MCP server distribution artifacts)
+
+### Fixed
+
+- File path resolution for prompts and data across directories
+- Cross-module imports for shared utilities
+
+---
+
+## [2.0.0] - 2026-01-29
+
+### Standardize Evaluation Suite for Agentic Integration
+
+Major architectural standardization to make evaluation metrics "Agent-ready" for seamless integration with tool-calling agents and future MCP server implementations.
+
+### Added
+
+#### Agent-Ready Functions
+- **24 standalone evaluation functions** - Decomposed from monolithic evaluator classes
+  - Explicit function schemas for each metric
+  - Comprehensive docstrings with Purpose, Args, Returns, and Examples
+  - Direct tool-calling registration support
+  - Simplified integration with AI agents
+
+#### Function Wrappers
+- **High-level wrapper functions** - One for each of the 24 metrics
+  - Consistent interface across all metrics
+  - Standardized input validation
+  - Explicit keyword arguments enforced
+
+#### Testing Infrastructure
+- **test_agent_function_calling.py** - Validates agent function calling
+  - Tests all 24 metrics as standalone functions
+  - Verifies schema compatibility
+  - Ensures proper error handling
+- **Reference implementation** - H2OGPTe agent example
+  - Demonstrates tool-calling with evaluation metrics
+  - Complete working example for integration
+
+### Changed
+
+#### Core Architecture
+- **Refactored LLMJudgeEvaluator class** - Transitioned to modular functions
+  - Removed tight coupling between metrics
+  - Simplified testing and maintenance
+  - Enhanced reusability across different contexts
+
+#### Error Handling Standardization
+- **Consistency fix for Error Scores**
+  - Converted `0.0` error scores to `None`
+  - Prevents statistical skewing in aggregate metrics
+  - Improves data quality for analysis
+- **Field normalization**
+  - Success cases now return `Error: None` explicitly
+  - Predictable JSON parsing for downstream tools
+  - Clear distinction between scores and error states
+
+#### Input Validation
+- **Enforced keyword arguments** - All 24 metrics updated
+  - Prevents positional argument errors
+  - Improves code clarity
+  - Better IDE autocomplete support
+- **Schema validation** - Comprehensive input checking
+  - Type validation for all parameters
+  - Clear error messages for invalid inputs
+  - Fail-fast approach for debugging
+
+#### Documentation
+- **Enhanced docstrings** - All 24 metrics updated with:
+  - **Purpose**: What the metric measures
+  - **Args**: Parameter descriptions with types
+  - **Returns**: Return value structure with examples
+  - **Examples**: Code snippets showing usage
+
+### Breaking Changes
+
+⚠️ **Function Signatures Changed**
+- All evaluation functions now require **keyword arguments only**
+- Positional arguments will raise `TypeError`
+
+**Migration Guide:**
+```python
+# Before (positional)
+score = evaluate_metric(source, summary)
+
+# After (keyword)
+score = evaluate_metric(source=source, summary=summary)
+```
+
+### Performance
+
+- No performance degradation
+- Function-based approach may enable future optimizations
+- Better memory management with independent functions
+
+---
+
 ## [1.1.0] - 2026-01-26
 
 ### Added
@@ -378,6 +604,18 @@ See LICENSE file
 
 ---
 
-**Current Version**: 1.0.0
-**Release Date**: 2026-01-25
+## Version Summary
+
+| Version | Focus Area | Key Achievement |
+|---------|-----------|-----------------|
+| 2.2.0 | Data Infrastructure | Organized data pipeline with CNN/DM integration |
+| 2.1.0 | Agent Integration | MCP server and orchestrator agent |
+| 2.0.0 | Architecture | Agent-ready standardization of 24 metrics |
+| 1.1.0 | Dataset Upload | Multi-format file upload with column mapping |
+| 1.0.0 | Metrics Complete | 15 evaluation metrics across 4 eras |
+
+---
+
+**Current Version**: 2.2.0
+**Release Date**: 2026-02-03
 **Status**: Production Ready ✅

@@ -17,35 +17,23 @@ pip install -r requirements.txt
 # 2. Download spaCy model
 python -m spacy download en_core_web_sm
 
-# 3. (Optional) Configure API for LLM metrics
+# 3. Configure API for LLM metrics
 cp .env.example .env
-# Edit .env with your H2OGPTE credentials
-
-# 4. Launch
-streamlit run ui/app.py
 ```
-
-The app opens at `http://localhost:8501`. Use the sidebar to navigate between:
-- **Standalone Evaluators** - Manual evaluation with all metrics
-- **Agent Evaluation** - AI agent-driven evaluation
-- **MCP Dashboard** - Build bundles and test tools
 
 ---
 
-## Four Ways to Use SumOmniEval
+## Three Ways to Use SumOmniEval
 
-### 1. Standalone Evaluators (Streamlit App)
-Use the interactive web interface to evaluate summaries manually.
+### 1. Standalone Evaluators 
+Use metrics directly in your code or as a interactive web app.
 
+Option 1: Use in Streamlit
 ```bash
 streamlit run ui/app.py
 ```
 
-Supports CSV, JSON, Excel (.xlsx), and TSV file uploads. Map your columns to Source, Summary, and Reference (optional).
-
-### 2. Python Library
-Import and use metrics directly in your code.
-
+Option 2: Use as Python Library
 ```python
 from src.evaluators.tool_logic import run_metric, run_multiple_metrics, list_available_metrics
 
@@ -69,16 +57,16 @@ results = run_multiple_metrics(
 metrics = list_available_metrics()
 ```
 
-### 3. Agent with Code Execution Tools
+### 2. Agent with Code Execution Tools
 Let an AI agent use the evaluation metrics as callable tools via H2OGPTE.
 
 ```bash
-python agents/h2o/orchestrator.py --agent-type agent --sample grenfell_tower
+python agents/h2o/orchestrator.py --agent-type agent --sample-idx 0 
 ```
 
 The agent uploads `tool_logic.py` and executes metrics directly through code execution.
 
-### 4. Agent with MCP Server
+### 3. Agent with MCP Server
 Use the Model Context Protocol (MCP) for structured tool access.
 
 ```bash
@@ -86,7 +74,7 @@ Use the Model Context Protocol (MCP) for structured tool access.
 python mcp_server/bundle.py
 
 # Run agent with MCP
-python agents/h2o/orchestrator.py --agent-type agent_with_mcp --sample grenfell_tower
+python agents/h2o/orchestrator.py --agent-type agent_with_mcp --sample-idx 0 
 ```
 
 The MCP server exposes these tools:
@@ -164,13 +152,11 @@ All local models download automatically on first use:
 SumOmniEval/
 ├── requirements.txt            # Python dependencies
 ├── METRICS.md                  # Complete metrics documentation
-├── .env.example                # API configuration template
+├── .env.example                # Secrets and credentials
+├── config.yaml                     # Configuration (paths, models, etc)
 │
 ├── ui/                         # Streamlit application
-│   ├── app.py                  # Main entry point (standalone evaluators)
-│   └── pages/
-│       ├── 1_Agent_Evaluation.py   # Agent-based evaluation UI
-│       └── 2_MCP_Dashboard.py      # MCP server management & testing
+│   └── app.py                  # Main entry point (standalone evaluators)
 │
 ├── src/evaluators/
 │   ├── tool_logic.py           # Unified tool interface (CLI + library)
@@ -193,12 +179,13 @@ SumOmniEval/
 │   └── bundle.py               # Bundle server for deployment
 │
 ├── data/
-│   └── sample_summaries.json   # Sample evaluation data
+│   ├── examples/               # Template files (CSV, JSON, XLSX)
+│   ├── processed/              # Processed data with AI summaries 
+│   ├── raw/                    # Raw downloaded data 
+│   └── scripts/                # Data processing pipeline
 │
-├── tests/
-│   └── test_all_metrics.py     # Comprehensive test suite
-│
-└── examples/                   # Sample datasets (CSV, JSON, Excel)
+└── tests/
+    └── test_all_metrics.py     # Comprehensive test suite
 ```
 
 ---

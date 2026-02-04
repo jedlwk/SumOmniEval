@@ -1,43 +1,72 @@
 """Data loading utilities for sample data."""
 
 import pandas as pd
+import json
 import os
 from typing import Dict, Optional
+
+# Load sample data as default
+DEFAULT_DATA = 'processed/cnn_dm_sample_with_gen_sum.json'
 
 
 def load_sample_data(data_path: Optional[str] = None) -> pd.DataFrame:
     """
-    Load sample data from CSV file.
+    Load sample data from CSV or JSON file.
 
     Args:
-        data_path: Path to the CSV file. If None, uses default location.
+        data_path: Path to the CSV or JSON file. If None, uses default location.
 
     Returns:
         DataFrame with 'report' and 'summary' columns.
 
     Raises:
         FileNotFoundError: If the data file doesn't exist.
-        ValueError: If the CSV doesn't have required columns.
+        ValueError: If the file doesn't have required columns or invalid format.
     """
     if data_path is None:
         # Default path relative to project root
         current_dir = os.path.dirname(os.path.abspath(__file__))
         project_root = os.path.dirname(os.path.dirname(current_dir))
-        data_path = os.path.join(project_root, 'data', 'sample_data.csv')
+        data_path = os.path.join(project_root, 'data', 'processed', DEFAULT_DATA)
 
     if not os.path.exists(data_path):
         raise FileNotFoundError(f"Sample data file not found at: {data_path}")
 
+    # Determine file type by extension
+    file_ext = os.path.splitext(data_path)[1].lower()
+
     try:
-        df = pd.read_csv(data_path)
+        if file_ext == '.json':
+            # Load JSON file
+            with open(data_path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+
+            # Convert to DataFrame
+            if isinstance(data, list):
+                df = pd.DataFrame(data)
+            else:
+                df = pd.DataFrame([data])
+
+            # Map common column names to expected format
+            # Support both 'source' and 'report' for source text
+            if 'source' in df.columns and 'report' not in df.columns:
+                df['report'] = df['source']
+
+        elif file_ext == '.csv':
+            df = pd.read_csv(data_path)
+        else:
+            raise ValueError(f"Unsupported file format: {file_ext}. Only .csv and .json are supported.")
+
+    except json.JSONDecodeError as e:
+        raise ValueError(f"Error parsing JSON file: {e}")
     except Exception as e:
-        raise ValueError(f"Error reading CSV file: {e}")
+        raise ValueError(f"Error reading file: {e}")
 
     # Validate required columns
     required_columns = ['report', 'summary']
     if not all(col in df.columns for col in required_columns):
         raise ValueError(
-            f"CSV must contain columns: {required_columns}. "
+            f"File must contain columns: {required_columns}. "
             f"Found: {list(df.columns)}"
         )
 
