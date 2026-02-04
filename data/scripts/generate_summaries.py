@@ -8,6 +8,7 @@ import os
 import json
 from dotenv import load_dotenv
 from pathlib import Path
+import nltk
 from h2ogpte import H2OGPTE
 
 # Load environment variables from .env
@@ -27,6 +28,21 @@ print("="*80)
 print(f"\n📍 Address: {ADDRESS}")
 print(f"🔑 API Key: {API_KEY[:20]}...{API_KEY[-10:]}")
 print()
+
+
+def count_words(text):
+    """
+    Count number of words using NLTK.
+    """
+    words = nltk.word_tokenize(text)
+
+    total_word_count = len(words)
+    return total_word_count
+
+
+def round_up_to_nearest_10(n):
+  """Rounds an integer up to the nearest multiple of 10."""
+  return (n + 9) // 10 * 10
 
 
 def generate_summaries(
@@ -79,17 +95,40 @@ def generate_summaries(
         print(f"  Article length: {len(source_text)} characters")
 
         try:
+            # Count words in reference summary to set target length
+            word_count = count_words(reference_summary)
+            # Round up to nearest 10 for the target word count
+            max_num_of_words = round_up_to_nearest_10(word_count)
+
+            # Fallback to 50 words if count is invalid (0 or negative)
+            if max_num_of_words <= 0:
+                max_num_of_words = 50
+                print(f"  ⚠️  Warning: Invalid word count, using fallback of {max_num_of_words} words")
+
+            prompt = f"""
+                Summarize the article into 3-4 concise bullet points.
+                Ensure the total length is no more than {max_num_of_words} words.
+            """
+
             # Generate summary using H2OGPTE
             summary_response = client.summarize_content(
                 text_context_list=[source_text],
                 llm=llm,
-                pre_prompt_summary="Please read the following news article carefully:",
-                prompt_summary="Provide a concise summary highlighting the main points and key facts from the article above."
+                prompt_summary=prompt
             )
 
             if summary_response.content:
                 generated_summary = summary_response.content
-                print(f"  ✓ Generated summary: {len(generated_summary)} characters")
+
+                # Enforce word limit by truncating if necessary
+                summary_word_count = count_words(generated_summary)
+                if summary_word_count > max_num_of_words:
+                    words = nltk.word_tokenize(generated_summary)
+                    truncated_words = words[:max_num_of_words]
+                    generated_summary = ' '.join(truncated_words)
+                    print(f"  ⚠️  Summary truncated from {summary_word_count} to {max_num_of_words} words")
+
+                print(f"  ✓ Generated summary: {len(generated_summary)} characters ({count_words(generated_summary)} words)")
             else:
                 generated_summary = f"Error: {summary_response.error}"
                 print(f"  ✗ Error: {summary_response.error}")

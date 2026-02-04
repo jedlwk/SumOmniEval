@@ -19,9 +19,9 @@ METRIC CATEGORIES:
 - LLM Judge (llm_faithfulness, llm_coherence, llm_relevance, llm_fluency): LLM-based evaluation
 
 DECISION GUIDE:
-- If user has source + reference: Can use all metrics
-- If user has only source: Use factuality metrics (nli, alignscore) + word overlap (rouge)
-- If user has only reference: Use word overlap (rouge, bleu) + semantic (bertscore)
-- If user has neither: Only use fluency (perplexity)
+1. If user has source + reference: Use all metrics
+2. If user has only source: Use Factuality + Completeness + LLM Judge (llm_faithfulness, llm_relevance)
+3. If user has only reference: Use Word Overlap + Semantic + LLM Judge (llm_coherence)
+4. If user has neither: Use Fluency + LLM Judge (llm_fluency, llm_coherence)
 
 Always run the appropriate metrics and provide clear interpretations of the results.

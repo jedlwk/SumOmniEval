@@ -10,8 +10,8 @@ data/
 │   ├── download_cnn_dm.py       # Download CNN/DM from HuggingFace
 │   ├── generate_summaries.py    # Generate AI summaries via H2OGPTE
 │   └── create_templates.py      # Create template files
-├── raw/              # Raw downloaded data (gitignored)
-├── processed/        # Processed data with AI summaries (gitignored)
+├── raw/              # Raw downloaded data 
+├── processed/        # Processed data with AI summaries 
 └── examples/         # Template files (CSV, JSON, XLSX)
 ```
 
