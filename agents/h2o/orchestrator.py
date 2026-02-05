@@ -93,7 +93,7 @@ def setup_collection(client: H2OGPTE, agent_type: str) -> str:
             tool_args={
                 'tool_name': 'sum_omni_eval_mcp',
                 'enable_by_default': False,
-                'tool_usage_mode': 'creator'
+                'tool_usage_mode': 'runner'
             },
             custom_tool_path=SERVER_FILE
         )
@@ -106,6 +106,52 @@ def run_evaluation(collection_id: str, client: H2OGPTE, agent_type: str, generat
     chat_session_id = client.create_chat_session(collection_id)
     print(f"Chat session created: {chat_session_id}")
 
+    # Select tool based on agent type
+    tool_name = ""
+    if agent_type == "agent":
+        tool_name = "tool_logic"
+    else:
+        tool_name = "sum_omni_eval_mcp"
+
+    # Select agent type
+    agent_type_str = "auto"
+    if agent_type == "agent":
+        agent_type_str = "general"
+    else:
+        agent_type_str = "mcp_tool_runner"
+
+    # Warmup: ensure MCP server is fully initialized before running evaluation
+    if agent_type == "agent_with_mcp":
+        max_retries = 3
+        retry_delay = 5  # seconds
+
+        for attempt in range(1, max_retries + 1):
+            print(f"Warming up MCP server (attempt {attempt}/{max_retries})...")
+            with client.connect(chat_session_id) as session:
+                warmup_reply = session.query(
+                    message="Call check_env_var to verify the MCP server is ready. Only respond with SUCCESS or FAILURE.",
+                    llm_args=dict(
+                        use_agent=True,
+                        agent_type=agent_type_str,
+                        agent_tools=[tool_name]
+                    )
+                )
+
+            response_text = warmup_reply.content.upper()
+            if "SUCCESS" in response_text:
+                print("MCP server ready - environment variables configured")
+                break
+            else:
+                print(f"MCP server not ready: {warmup_reply.content[:100]}...")
+                if attempt < max_retries:
+                    print(f"Retrying in {retry_delay} seconds...")
+                    time.sleep(retry_delay)
+                else:
+                    raise RuntimeError(
+                        f"MCP server failed to initialize after {max_retries} attempts. "
+                        "Environment variables may not be configured correctly."
+                    )
+
     # Load prompts
     system_prompt = load_prompt('system.md')
 
@@ -116,20 +162,6 @@ def run_evaluation(collection_id: str, client: H2OGPTE, agent_type: str, generat
         reference_summary=reference_summary,
         source=source
     )
-
-    # Select tool based on agent type
-    tool_name = ""
-    if agent_type == "agent":
-        tool_name = "tool_logic"
-    else:
-        tool_name = "sum_omni_eval_mcp"
-    
-    # Select agent type
-    agent_type_str = "auto"
-    if agent_type == "agent":
-        agent_type_str = "general"
-    else:
-        agent_type_str = "mcp_tool_runner"
 
     print(f"Running agent query with tool: {tool_name} and agent type: {agent_type_str}")
     with client.connect(chat_session_id) as session:

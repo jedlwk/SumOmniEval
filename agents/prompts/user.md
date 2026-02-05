@@ -20,43 +20,39 @@ Evaluate the quality of the generated summary provided below.
    {%- else %} neither the Source nor a Reference.
    {%- endif %}
 
-2. **Metric Selection & Execution:** Based on your scenario, run these metrics:
+2. **Metric Selection & Execution:** Use the MCP tool `run_multiple` with the following parameters based on your scenario:
 
 {% if source and reference_summary %}
    {# Full Diagnostic: Word Overlap + Semantic + Factuality + Completeness + G-Eval #}
-   ```bash
-   python -m src.evaluators.tool_logic run_multiple \
-     --metrics "rouge, bleu, meteor, levenshtein, perplexity, chrf,bertscore, moverscore, nli, factcc, alignscore, entity_coverage, factchecker_api, semantic_coverage, bertscore_recall, bartscore,llm_faithfulness, llm_coherence, llm_relevance, llm_fluency, llm_dag, llm_prometheus" \
-     --summary "{{ generated_summary }}" \
-     --source "{{ source }}" \
-     --reference "{{ reference_summary }}"
-   ```
+   **MCP Tool:** `run_multiple`
+   **Parameters:**
+   - metrics: ["rouge", "bleu", "meteor", "levenshtein", "perplexity", "chrf", "bertscore", "moverscore", "nli", "factcc", "alignscore", "entity_coverage", "factchecker_api", "semantic_coverage", "bertscore_recall", "bartscore", "llm_faithfulness", "llm_coherence", "llm_relevance", "llm_fluency", "llm_dag", "llm_prometheus"]
+   - summary: "{{ generated_summary }}"
+   - source: "{{ source }}"
+   - reference: "{{ reference_summary }}"
 
 {% elif source %}
    {# Truth-First: Factuality + Completeness + G-Eval Faithfulness/Relevance #}
-   ```bash
-   python -m src.evaluators.tool_logic run_multiple \
-     --metrics "nli, factcc, alignscore, entity_coverage, factchecker_api,semantic_coverage, bertscore_recall, bartscore, llm_faithfulness,llm_relevance" \
-     --summary "{{ generated_summary }}" \
-     --source "{{ source }}"
-   ```
+   **MCP Tool:** `run_multiple`
+   **Parameters:**
+   - metrics: ["nli", "factcc", "alignscore", "entity_coverage", "factchecker_api", "semantic_coverage", "bertscore_recall", "bartscore", "llm_faithfulness", "llm_relevance"]
+   - summary: "{{ generated_summary }}"
+   - source: "{{ source }}"
 
 {% elif reference_summary %}
    {# Stylistic-Match: Word Overlap + Semantic + G-Eval Coherence #}
-   ```bash
-   python -m src.evaluators.tool_logic run_multiple \
-     --metrics "rouge, bleu, meteor, levenshtein, perplexity, chrf,bertscore, moverscore, llm_coherence" \
-     --summary "{{ generated_summary }}" \
-     --reference "{{ reference_summary }}"
-   ```
+   **MCP Tool:** `run_multiple`
+   **Parameters:**
+   - metrics: ["rouge", "bleu", "meteor", "levenshtein", "perplexity", "chrf", "bertscore", "moverscore", "llm_coherence"]
+   - summary: "{{ generated_summary }}"
+   - reference: "{{ reference_summary }}"
 
 {% else %}
    {# Linguistic-Sanity: Perplexity + G-Eval Fluency #}
-   ```bash
-   python -m src.evaluators.tool_logic run_multiple \
-     --metrics "perplexity, llm_fluency" \
-     --summary "{{ generated_summary }}"
-   ```
+   **MCP Tool:** `run_multiple`
+   **Parameters:**
+   - metrics: ["perplexity", "llm_fluency"]
+   - summary: "{{ generated_summary }}"
 {% endif %}
 
 3. **Synthesis:** Provide a final quality assessment based on the results.
