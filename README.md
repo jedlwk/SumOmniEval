@@ -64,7 +64,11 @@ metrics = list_available_metrics()
 Let an AI agent use the evaluation metrics as callable tools via H2OGPTE.
 
 ```bash
-python agents/h2o/orchestrator.py --agent-type agent --sample-idx 0 
+# Default: Run agent on CNN/DM dataset
+python agents/h2o/orchestrator.py --agent-type agent --sample-idx 0
+
+# Run agent on Custom dataset
+python agents/h2o/orchestrator.py --agent-type agent --sample-idx 0 --data-file data/processed/YOUR_FILE.json
 ```
 
 The agent uploads `tool_logic.py` and executes metrics directly through code execution.
@@ -73,14 +77,20 @@ The agent uploads `tool_logic.py` and executes metrics directly through code exe
 Use the Model Context Protocol (MCP) for structured tool access.
 
 ```bash
-# First, bundle the MCP server
+# Bundle the MCP server
 python mcp_server/bundle.py
 
-# Run agent with MCP
-python agents/h2o/orchestrator.py --agent-type agent_with_mcp --sample-idx 0 
+# Default: Run agent on CNN/DM dataset
+python agents/h2o/orchestrator.py --agent-type agent_with_mcp --sample-idx 0
+
+# Run agent on Custom dataset
+python agents/h2o/orchestrator.py --agent-type agent_with_mcp --sample-idx 0 --data-file data/processed/YOUR_FILE.json
 ```
 
-The MCP server exposes these tools:
+**MCP Server Tools:**
+
+- `check_env_var()` - Verify MCP server is ready (env setup takes time)
+  - Prompt: "Call check_env_var to verify the MCP server is ready. Only respond with SUCCESS or FAILURE."
 - `list_metrics()` - List all available metrics
 - `run_single_metric(metric_name, summary, source, reference)` - Run one metric
 - `run_multiple(metrics, summary, source, reference)` - Run multiple metrics
@@ -278,6 +288,7 @@ See [METRICS.md](METRICS.md) for alternatives.
 
 ## Version
 
+- **v2.4** - New prompt architecture, enhanced documentation
 - **v2.3** - MCP warmup, system installation and dynamic Jinja2 prompt
 - **v2.2** - Restructure data folder, pipeline and documentation
 - **v2.1** - Added agent integration and MCP server support

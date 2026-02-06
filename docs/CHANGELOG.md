@@ -4,6 +4,72 @@ All notable changes to this project are documented here.
 
 ---
 
+## [2.4.0] - 2026-02-06
+
+### Prompt System Refactoring and Documentation Improvements
+
+Modularized prompt architecture and enhanced documentation for better usability and maintainability.
+
+### Added
+
+#### Modular Prompt System
+- **system_base.md** - Shared foundation for all agent modes
+  - Role and framework description
+  - Metric categories and interpretation standards
+  - Tone/style guidelines
+  - Output format specifications
+- **system_mcp.md** - MCP mode-specific instructions
+  - Scenario detection and metric selection logic
+  - Explicit MCP `run_multiple` tool usage instructions
+  - Metric lists for all four scenarios
+- **system_standalone.md** - Standalone mode-specific instructions
+  - Qualitative evaluation approach without tool dependencies
+  - Close reading and text analysis methods
+  - Evidence-based assessment guidelines
+
+#### Orchestrator Enhancements
+- **--data-file argument** - Custom dataset support for agent orchestrator
+  - Enables evaluation of user-provided datasets
+  - Default: CNN/DM dataset
+  - Accepts JSON files from `data/processed/` directory
+
+### Changed
+
+#### Prompt Architecture
+- **user.md simplified** - Reduced to essential data inputs only
+  - Removed system-level instructions (moved to system.md)
+  - Removed output format specifications (moved to system_base.md)
+  - Now contains only: task description and template variables
+  - Represents actual user input rather than system instructions
+- **system.md decomposed** - Static instructions without Jinja2 templating
+  - Removed dynamic conditional logic from system prompts
+  - Enables consistent, debuggable system instructions
+  - Agent determines scenario based on available inputs
+
+#### Documentation
+- **README.md refinements** - Improved code snippet clarity
+  - Followed GitHub best practices for examples
+  - Shortened comments and improved readability
+  - Used clear placeholders (CAPS convention)
+  - Emphasized `check_env_var()` as first step for MCP mode
+- **tests/README.md** - Enhanced testing documentation
+
+### Benefits
+
+**Prompt Modularity**:
+- No duplication: Shared content in system_base.md
+- Clean separation: Mode-specific logic isolated
+- Easy maintenance: Update base once, affects all modes
+- Flexibility: Can easily add new modes (e.g., batch processing)
+
+**Static System Prompts**:
+- Predictable behavior across invocations
+- Easier debugging and troubleshooting
+- Clear separation of concerns
+- Agent intelligence for scenario detection
+
+---
+
 ## [2.3.0] - 2026-02-06
 
 ### Agent and MCP Server Enhancements
@@ -684,6 +750,7 @@ See LICENSE file
 
 | Version | Focus Area | Key Achievement |
 |---------|-----------|-----------------|
+| 2.4.0 | Prompt Architecture | Modular prompts (base/mcp/standalone), static system instructions |
 | 2.3.0 | Agent & MCP | MCP warmup, credential flow fix, dynamic prompts |
 | 2.2.0 | Data Infrastructure | Organized data pipeline with CNN/DM integration |
 | 2.1.0 | Agent Integration | MCP server and orchestrator agent |
@@ -693,6 +760,6 @@ See LICENSE file
 
 ---
 
-**Current Version**: 2.3.0
+**Current Version**: 2.4.0
 **Release Date**: 2026-02-06
 **Status**: Production Ready ✅

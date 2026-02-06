@@ -161,9 +161,6 @@ def run_evaluation(collection_id: str, client: H2OGPTE, agent_type: str, generat
                         "Environment variables may not be configured correctly."
                     )
 
-    # Load prompts
-    system_prompt = load_prompt('system_base.md')
-
     # Load system prompt based on agent type
     system_prompt = load_prompt('system_base.md')
     if agent_type == "agent":
