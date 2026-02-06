@@ -210,7 +210,11 @@ SumOmniEval/
 │   └── scripts/                # Data processing pipeline
 │
 └── tests/
-    └── test_all_metrics.py     # Comprehensive test suite
+│   ├── test_all_metrics.py.    # Comprehensive pytest test suite
+│   ├── test_h2ogpte_api.py.    # Raw downloaded data 
+│   ├── test_h2ogpte_models.py. # Model Availability Check
+│   ├── test_h2ogpte_agent.py   # Agent Tool Integration
+    └── test_simple_agent.py    # Simple agent framework demo
 ```
 
 ---

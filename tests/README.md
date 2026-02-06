@@ -7,142 +7,101 @@ This directory contains all test scripts for verifying metric functionality.
 Run the comprehensive test suite to verify all metrics:
 
 ```bash
-python3 tests/test_all_new_metrics.py
+python3 -m pytest tests/test_all_metrics.py -v
 ```
 
-**Expected output**: All metrics should pass with ✅ indicators.
+**Expected output**: All test cases should pass with PASSED indicators.
 
 ---
 
 ## Test Files
 
-### Comprehensive Tests
+### Main Test Suite
 
-**`test_all_new_metrics.py`** - Main test suite
-- Tests all newly added metrics (FactCC, DAG)
-- Tests Era 3A integration (NLI + FactCC + FactChecker)
-- Tests Era 3B integration (G-Eval + DAG)
+**`test_all_metrics.py`** - Comprehensive pytest test suite
+- Tests Era 1: Lexical metrics (ROUGE, BLEU, METEOR, chrF++, Levenshtein, Perplexity)
+- Tests Era 2: Semantic metrics (BERTScore, MoverScore)
+- Tests Era 3A: Logic checkers (NLI, FactCC, AlignScore, Coverage Score)
+- Tests Era 3B: LLM-as-a-Judge (G-Eval, DAG, Prometheus)
+- Tests Completeness metrics (Semantic Coverage, BERTScore Recall, BARTScore)
+- Includes edge case testing and full pipeline integration
 - **Run this first** to verify everything works
 
 ```bash
-python3 tests/test_all_new_metrics.py
+python3 -m pytest tests/test_all_metrics.py -v
 ```
 
-### Era-Specific Tests
+### API & Utility Tests
 
-**`test_era3a_factchecker.py`** - Era 3A Logic Checkers
-- Tests NLI (DeBERTa-v3)
-- Tests FactCC (BERT)
-- Tests FactChecker (API)
-
-```bash
-python3 tests/test_era3a_factchecker.py
-```
-
-**`test_era3b_individual.py`** - Era 3B AI Simulators
-- Tests each G-Eval dimension individually
-- Tests DAG decision tree evaluation
-- Verifies all API metrics work independently
-
-```bash
-python3 tests/test_era3b_individual.py
-```
-
-**`test_era3b_final.py`** - Era 3B Integration
-- Tests all Era 3B metrics together
-- Verifies combined evaluation
-
-```bash
-python3 tests/test_era3b_final.py
-```
-
-### API Tests
-
-**`test_h2ogpte_api.py`** - API Connectivity
+**`test_h2ogpte_api.py`** - API Connectivity Test
 - Tests H2OGPTE API connection
 - Verifies API key and address configuration
-- Simple query to confirm access
+- Simple query to confirm API access works
 
 ```bash
 python3 tests/test_h2ogpte_api.py
 ```
 
-**`test_corrected_models.py`** - Model Verification
-- Tests which models are available
+**`test_h2ogpte_models.py`** - Model Availability Check
+- Lists all available models from the API
 - Verifies model names are correct
 - Useful for debugging model access issues
 
 ```bash
-python3 tests/test_corrected_models.py
+python3 tests/test_h2ogpte_models.py
 ```
 
-### Legacy Tests
+### Agent Integration Tests
 
-**`test_evaluators.py`** - Original test suite
-- Tests Era 1 and Era 2 metrics
-- Basic functionality verification
+**`test_h2ogpte_agent.py`** - Agent Tool Integration
+- Tests H2OGPTE agent with custom tool ingestion
+- Demonstrates agent_only ingest mode
+- Tests tool calling capabilities with metrics
 
 ```bash
-python3 tests/test_evaluators.py
+python3 tests/test_h2ogpte_agent.py
 ```
 
-**`test_llm_judge.py`** - LLM Judge tests
-- Early Era 3B testing
-- Superseded by test_era3b_individual.py
-
----
-
-## Research Scripts
-
-**`check_available_metrics.py`** - Metric Research
-- Investigates which workshop plan metrics can be implemented
-- Checks model sizes and dependencies
-- Documents why certain metrics were skipped
+**`test_simple_agent.py`** - Simple Agent Framework
+- Implements a simple agent that calls evaluation metrics as tools
+- Demonstrates tool schema definition for LLM function calling
+- Multi-step evaluation workflow example
 
 ```bash
-python3 tests/check_available_metrics.py
+python3 tests/test_simple_agent.py
+```
+
+**`example_tool.py`** - Example Tool Implementation
+- Example metric tool (ROUGE scores) for agent use
+- Shows proper tool schema and CLI argument handling
+- Can be used as a template for creating new metric tools
+
+```bash
+python3 tests/example_tool.py --summary "text" --source "text"
 ```
 
 ---
 
 ## Expected Test Results
 
-### test_all_new_metrics.py
+### test_all_metrics.py
 
+When running the comprehensive test suite with pytest:
+
+```bash
+python3 -m pytest tests/test_all_metrics.py -v
 ```
-================================================================================
-Testing All New Metrics (FactCC + DAG)
-================================================================================
 
-TEST 1: FactCC (BERT-based Consistency Checker)
-✅ Good summary: 0.9941 (Highly Consistent)
-✅ Bad summary: 0.0055 (Inconsistent)
+**Expected output**: All tests should pass with ✅ indicators, covering:
+- 6 Era 1 metrics (ROUGE, BLEU, METEOR, chrF++, Levenshtein, Perplexity)
+- 2 Era 2 metrics (BERTScore, MoverScore)
+- 4 Era 3A metrics (NLI, FactCC, AlignScore, Coverage Score)
+- 5 Era 3B metrics (G-Eval dimensions + DAG + Prometheus)
+- 3 Completeness metrics (Semantic Coverage, BERTScore Recall, BARTScore)
+- Edge case handling tests
+- Full pipeline integration tests
 
-TEST 2: DAG (Decision Tree Evaluation)
-✅ Good summary: 6/6 (1.000)
-   Step 1 (Factual): 2/2
-   Step 2 (Complete): 2/2
-   Step 3 (Clarity): 2/2
-
-✅ Bad summary: 2/6 (0.333)
-   Step 1 (Factual): 0/2
-   Step 2 (Complete): 0/2
-   Step 3 (Clarity): 2/2
-
-TEST 3: All Era 3A Metrics Together
-  NLI: ✅ 0.4418
-  FactCC: ✅ 0.9941
-  FactChecker: ✅ 1.0000
-
-TEST 4: All Era 3B Metrics Together
-  faithfulness: ✅ 0.900
-  coherence: ✅ 0.700
-  relevance: ✅ 0.900
-  fluency: ✅ 0.800
-  dag: ✅ 1.000
-
-✅ All new metrics tested successfully!
-```
+**Total**: 40+ test cases covering all 15+ metrics
 
 ---
 
@@ -206,17 +165,21 @@ When adding new metrics:
 
 Test execution times (approximate):
 
-| Test File | Time | API Calls |
-|-----------|------|-----------|
-| test_evaluators.py | ~30s | 0 |
-| test_era3a_factchecker.py | ~60s | 1 |
-| test_era3b_individual.py | ~5min | 5 |
-| test_all_new_metrics.py | ~6min | 6 |
+| Test File | Time | API Calls | Notes |
+|-----------|------|-----------|-------|
+| test_all_metrics.py | ~5-10min | 6-8 | Comprehensive suite, includes API metrics |
+| test_h2ogpte_api.py | ~5s | 1 | Quick connectivity check |
+| test_corrected_models.py | ~5s | 1 | Lists available models |
+| test_h2ogpte_agent.py | ~30-60s | 2-3 | Agent tool integration |
+| test_simple_agent.py | ~30s | 0-1 | Simple agent framework demo |
 
-**Total test suite**: ~10 minutes (if running all tests sequentially)
+**Notes**:
+- Local-only metrics (Era 1, Era 2) run quickly (<30s total)
+- API-dependent metrics (Era 3B) take longer due to API calls
+- First run may be slower due to model downloads
 
 ---
 
-**Last Updated**: 2026-01-25
-**Total Test Files**: 9
-**Coverage**: All 15 metrics
+**Last Updated**: 2026-02-06
+**Total Test Files**: 6
+**Coverage**: All 15+ metrics across 4 eras (Lexical, Semantic, Logic Checkers, LLM-as-a-Judge)
