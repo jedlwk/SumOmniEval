@@ -48,21 +48,23 @@ def render_dynamic_prompt(template_name: str, **kwargs) -> str:
     return template.render(**kwargs)
 
 
-def load_summaries(sample_idx: int = None) -> dict:
+def load_summaries(sample_idx: int = None, data_file: str = None) -> dict:
     """
     Load summaries from the sample summaries JSON file.
 
     Args:
         sample_idx: Optional index to load a specific sample.
                    If None, returns all samples.
+        data_file: Optional path to data file. If None, uses default DATA_FILE.
 
     Returns:
         Dictionary containing the sample(s).
     """
-    if not os.path.exists(DATA_FILE):
-        raise FileNotFoundError(f"Data file not found: '{DATA_FILE}'")
+    file_path = os.path.join(PROJECT_ROOT, data_file) if data_file is not None else DATA_FILE
+    if not os.path.exists(file_path):
+        raise FileNotFoundError(f"Data file not found: '{file_path}'")
 
-    with open(DATA_FILE, 'r', encoding='utf-8') as f:
+    with open(file_path, 'r', encoding='utf-8') as f:
         data = json.load(f)
 
     if sample_idx is not None:
