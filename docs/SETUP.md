@@ -1,4 +1,4 @@
-# SumOmniEval - Setup Guide
+# H2O SumBench - Setup Guide
 
 Complete installation and configuration guide.
 
@@ -58,7 +58,7 @@ App opens at: `http://localhost:8501`
 
 ```bash
 # Clone or download the repository
-cd SumOmniEval
+cd H2O SumBench
 
 # Install all dependencies
 pip install -r requirements.txt
@@ -353,7 +353,7 @@ rm -rf ~/.cache/huggingface/transformers
 
 ```bash
 # Keep models for future use
-rm -rf SumOmniEval
+rm -rf H2O SumBench
 
 # Remove models too (frees ~3GB)
 rm -rf ~/.cache/huggingface
@@ -386,8 +386,8 @@ CMD ["streamlit", "run", "ui/app.py"]
 
 Build and run:
 ```bash
-docker build -t sumomnieval .
-docker run -p 8501:8501 -v $(pwd)/.env:/app/.env sumomnieval
+docker build -t sumbench .
+docker run -p 8501:8501 -v $(pwd)/.env:/app/.env sumbench
 ```
 
 ---

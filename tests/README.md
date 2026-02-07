@@ -1,4 +1,4 @@
-# SumOmniEval - Testing Guide
+# H2O SumBench - Testing Guide
 
 This directory contains all test scripts for verifying metric functionality.
 

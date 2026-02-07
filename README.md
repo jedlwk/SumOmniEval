@@ -1,4 +1,4 @@
-# SumOmniEval
+# H2O SumBench
 
 **Comprehensive Summarization Evaluation Framework**
 
@@ -36,7 +36,7 @@ python -c "import nltk; nltk.download('punkt_tab')"
 
 ---
 
-## Three Ways to Use SumOmniEval
+## Three Ways to Use H2O SumBench
 
 ### 1. Standalone Evaluators
 Use metrics directly in your code or as a interactive web app.
@@ -105,6 +105,8 @@ python agents/h2o/orchestrator.py --agent-type agent_with_mcp --sample-idx 0 --d
 - `run_single_metric(metric_name, summary, source, reference)` - Run one metric
 - `run_multiple(metrics, summary, source, reference)` - Run multiple metrics
 - `get_info(metric_name)` - Get metric details
+
+**Note:** The orchestrator automatically creates Agent Keys via the H2OGPTE API to inject `H2OGPTE_API_KEY` and `H2OGPTE_ADDRESS` into the MCP server process. Keys are reused across runs.
 
 ---
 
@@ -193,7 +195,7 @@ All local models download automatically on first use:
 ## Project Structure
 
 ```
-SumOmniEval/
+H2O SumBench/
 ├── setup.py                        # One-shot install script
 ├── requirements.txt                # Python dependencies
 ├── .env.example                    # Secrets and credentials

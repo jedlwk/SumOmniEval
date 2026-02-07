@@ -1,5 +1,5 @@
 """
-Build an MCP server for SumOmniEval.
+Build an MCP server for H2O SumBench.
 """
 
 import os
@@ -50,7 +50,7 @@ except ImportError:
         get_metric_info,
     )
 
-mcp = FastMCP("SumOmniEval MCP Server")
+mcp = FastMCP("H2O SumBench MCP Server")
 
 
 @mcp.tool()

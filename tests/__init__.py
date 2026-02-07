@@ -1,1 +1,1 @@
-"""Test suite for SumOmniEval."""
+"""Test suite for H2O SumBench."""

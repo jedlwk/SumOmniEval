@@ -26,7 +26,7 @@ def should_exclude(path: str) -> bool:
     return False
 
 
-def build_mcp_zip(output_name: str = "sum_omni_eval_mcp.zip", cleanup: bool = True):
+def build_mcp_zip(output_name: str = "sumbench_mcp.zip", cleanup: bool = True):
     """
     Build a zip file containing the MCP server and all dependencies.
 
@@ -114,7 +114,7 @@ if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser(description="Bundle MCP server for deployment")
-    parser.add_argument("--output", "-o", default="sum_omni_eval_mcp.zip",
+    parser.add_argument("--output", "-o", default="sumbench_mcp.zip",
                         help="Output zip filename")
     parser.add_argument("--no-cleanup", action="store_true",
                         help="Keep the temp directory after bundling")

@@ -1,4 +1,4 @@
-# Getting Started with SumOmniEval
+# Getting Started with H2O SumBench
 
 **For a colleague seeing this project for the first time**
 
@@ -8,7 +8,7 @@ This guide will get you up and running in 10 minutes.
 
 ## What Is This?
 
-SumOmniEval is a **text summarization evaluation tool** with **24 metrics** organized into 5 dimensions:
+H2O SumBench is a **text summarization evaluation tool** with **24 metrics** organized into 5 dimensions:
 
 - **Faithfulness** (4 metrics) - Does the summary stick to the source?
 - **Completeness** (4 metrics) - How much key information was captured?
@@ -36,7 +36,7 @@ SumOmniEval is a **text summarization evaluation tool** with **24 metrics** orga
 
 ```bash
 # Navigate to project directory
-cd SumOmniEval
+cd H2O SumBench
 
 # One-shot install (dependencies + spaCy model + NLTK data)
 python setup.py
@@ -202,7 +202,7 @@ python3 tests/test_h2ogpte_api.py
 ## Project Structure
 
 ```
-SumOmniEval/
+H2O SumBench/
 │
 ├── setup.py                        # One-shot install script
 ├── ui/

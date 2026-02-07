@@ -1,4 +1,4 @@
-# SumOmniEval: Complete Metrics Guide
+# H2O SumBench: Complete Metrics Guide
 
 **24 metrics** across 5 evaluation dimensions.
 All local models are under 2GB each. API metrics use H2OGPTE.

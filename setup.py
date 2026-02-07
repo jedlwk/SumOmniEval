@@ -1,5 +1,5 @@
 """
-SumOmniEval - One-shot setup script.
+H2O SumBench - One-shot setup script.
 
 Installs all Python dependencies, downloads the spaCy language model,
 and fetches required NLTK data. Works on macOS, Linux, and Windows.
@@ -27,7 +27,7 @@ def run(description, cmd):
 def main():
     py = sys.executable  # current Python interpreter
 
-    print("\nSumOmniEval Setup")
+    print("\nH2O SumBench Setup")
     print(f"Python: {py}\n")
 
     # 1. pip install

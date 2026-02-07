@@ -3,7 +3,7 @@
 Full H2OGPTE Agent Test with All Evaluation Metrics.
 
 This test demonstrates using H2OGPTE agent with all summary evaluation metrics
-from SumOmniEval. The agent decides which metrics to use based on:
+from H2O SumBench. The agent decides which metrics to use based on:
 1. What the user wants to evaluate (factuality, fluency, completeness, etc.)
 2. Whether a reference summary is available
 """
@@ -23,7 +23,7 @@ from shared_utils import load_prompt, load_summaries, render_dynamic_prompt
 BASE_DIR = os.path.dirname(__file__)
 TOOL_FILENAME = 'tool_logic.py'
 TOOL_FILE = os.path.join(BASE_DIR, '..', '..', 'src', 'evaluators', TOOL_FILENAME)
-SERVER_FILENAME = 'sum_omni_eval_mcp.zip'
+SERVER_FILENAME = 'sumbench_mcp.zip'
 SERVER_FILE = os.path.join(BASE_DIR, '..', '..', 'mcp_server', SERVER_FILENAME)
 
 def create_client() -> H2OGPTE:
@@ -81,13 +81,13 @@ def setup_collection(client: H2OGPTE, agent_type: str) -> str:
     # Create collection based on agent type
     if agent_type == "agent":
         collection_id = client.create_collection(
-        name='SumOmniEval Agent Only',
-        description='H2OGPTE Agent: Evaluate summaries using SumOmniEval metrics through tool-calling.',
+        name='H2O SumBench Agent Only',
+        description='H2OGPTE Agent: Evaluate summaries using H2O SumBench metrics through tool-calling.',
     )
     else:  # agent_with_mcp
         collection_id = client.create_collection(
-        name='SumOmniEval Agent with MCP',
-        description='H2OGPTE Agent: Evaluate summaries using SumOmniEval metrics through local MCP server.',
+        name='H2O SumBench Agent with MCP',
+        description='H2OGPTE Agent: Evaluate summaries using H2O SumBench metrics through local MCP server.',
     )
     print(f"Collection created: {collection_id}")
 

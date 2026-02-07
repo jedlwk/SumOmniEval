@@ -1,4 +1,4 @@
-# SumOmniEval - Changelog
+# H2O SumBench - Changelog
 
 All notable changes to this project are documented here.
 
@@ -145,7 +145,7 @@ Major improvements to agent orchestration and MCP server configuration for relia
 
 #### Agent Configuration
 - **agent_type parameter** - Supports `agent` and `agent_with_mcp` modes
-- **agent_tools configuration** - Explicit tool registration (`tool_logic` or `sum_omni_eval_mcp`)
+- **agent_tools configuration** - Explicit tool registration (`tool_logic` or `sumbench_mcp`)
 - **tool_usage_mode** - Changed from `creator` to `runner` for direct MCP tool invocation
   - `creator` mode caused agent to write Python scripts (wrong process, no env vars)
   - `runner` mode enables direct MCP tool calls (correct process, env vars available)

@@ -1,6 +1,6 @@
 # Data Folder
 
-Contains datasets, templates, and processing scripts for SumOmniEval.
+Contains datasets, templates, and processing scripts for H2O SumBench.
 
 ## Structure
 

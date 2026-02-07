@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Comprehensive test suite for ALL metrics in SumOmniEval.
+Comprehensive test suite for ALL metrics in H2O SumBench.
 
 This test covers:
 - Era 1: Lexical Conformance (ROUGE, BLEU, METEOR, chrF++, Levenshtein, Perplexity)
